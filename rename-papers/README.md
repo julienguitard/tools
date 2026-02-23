@@ -3,21 +3,19 @@
 Rename research paper PDFs based on their content using OpenAI.
 
 ```
-2510.12269v3.pdf  →  2510.12269v3.tensor_logic_for_ai.pdf
+2510.12269v3.pdf  →  2510.12269v3_tensor_logic_for_ai.pdf
 0310054.pdf       →  0310054_kleene_algebra_domain.pdf
 ```
 
 ## Setup
 
 ```bash
-# 1. Clone / copy this folder to ~/tools/
-cp -r rename-papers ~/tools/rename-papers
-cd ~/tools/rename-papers
+cd rename-papers
 
-# 2. Create venv + install deps
+# Create venv + install deps
 make setup
 
-# 3. Add your API key
+# Add your API key
 $EDITOR .env
 ```
 
@@ -35,7 +33,7 @@ make run FOLDER=~/Downloads/papers
 
 ```bash
 # Symlink the wrapper into your PATH
-ln -s ~/tools/rename-papers/bin/rename-papers ~/.local/bin/rename-papers
+ln -s ~/tools/rename-papers/rename-papers.sh ~/.local/bin/rename-papers
 
 # Then from anywhere:
 rename-papers ~/Downloads/papers --dry-run
@@ -47,23 +45,81 @@ rename-papers ~/Downloads/papers --model gpt-4o
 
 ```
 rename-papers/
-├── .env.example          # Template — copy to .env
-├── .env                  # Your secrets (gitignored)
-├── .venv/                # Python virtual environment
-├── Makefile              # setup / run / clean targets
-├── README.md
-├── bin/
-│   └── rename-papers     # Shell wrapper for ~/.local/bin/
-├── rename_papers.py      # Main script
-└── requirements.txt
+├── .env.example              # Template — copy to .env
+├── Makefile                  # setup / run / dry-run / clean targets
+├── requirements.txt
+├── rename-papers.sh          # Shell wrapper for global PATH access
+└── rename_papers/            # Python package
+    ├── __init__.py
+    ├── __main__.py           # CLI entry point (argparse)
+    ├── domain.py             # IdPrefix, Article, PaperFile, RenameAction
+    ├── ports.py              # FileSystem, PdfReader, SlugGenerator
+    ├── service.py            # PaperRenamer + make_renamer() factory
+    └── adapters/
+        ├── __init__.py
+        ├── filesystem.py     # LocalFileSystem
+        ├── pdf_reader.py     # PyMuPdfReader
+        └── slug_generator.py # OpenAiSlugGenerator
 ```
 
-## .gitignore reminder
+## Protocols
 
-If you version this, add:
+### FileSystem
 
+```python
+class FileSystem(Protocol):
+    def list_pdfs(self, folder: Path) -> list[Path]: ...
+    def rename(self, source: Path, target: Path) -> None: ...
+    def exists(self, path: Path) -> bool: ...
 ```
-.env
-.venv/
-__pycache__/
+
+### PdfReader
+
+```python
+class PdfReader(Protocol):
+    def extract_text(self, path: Path) -> str: ...
 ```
+
+### SlugGenerator
+
+```python
+class SlugGenerator(Protocol):
+    def generate(self, text: str) -> str: ...
+```
+
+## Types
+
+### IdPrefix
+
+- `value: str` — Numeric identifier (e.g. `"2510.12269v3"`)
+- `separator: str` — Separator character (`"_"`)
+
+### Article
+
+- `slug: str` — Semantic slug (e.g. `"tensor_logic_for_ai"`)
+
+### PaperFile
+
+- `path: Path` — PDF file path
+- `id_prefix: IdPrefix` — Parsed numeric ID
+
+### RenameAction
+
+- `source: Path` — Original file path
+- `new_name: str` — Target filename
+- `skipped: bool` — Whether this file is skipped
+- `reason: str` — Reason for skip/keep
+
+## Implementations
+
+| Adapter | Protocol | Description |
+|---------|----------|-------------|
+| `LocalFileSystem` | `FileSystem` | Real filesystem operations |
+| `PyMuPdfReader` | `PdfReader` | Text extraction via PyMuPDF (first N pages) |
+| `OpenAiSlugGenerator` | `SlugGenerator` | Slug generation via OpenAI chat completions |
+
+## Dependencies
+
+- `openai` — OpenAI Python SDK
+- `pymupdf` — PDF text extraction
+- `python-dotenv` — `.env` file loading
