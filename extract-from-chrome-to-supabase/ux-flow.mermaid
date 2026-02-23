@@ -1,0 +1,50 @@
+flowchart TD
+    Start([▶ ./run.sh]) --> LoadEnv[Load .env config]
+    LoadEnv --> FetchExisting[/"GET /select-table?table=links<br/>Fetch existing links from Supabase"/]
+    FetchExisting --> ShowCount["📚 N link(s) already in Supabase"]
+    ShowCount --> FetchTabs[/"Read Chrome tabs via AppleScript"/]
+    FetchTabs --> HasTabs{Tabs found?}
+    HasTabs -- No --> NoTabs([No Chrome tabs found]) 
+    HasTabs -- Yes --> NextTab
+
+    subgraph loop ["For each tab"]
+        NextTab["Show tab title + URL<br/>Flag ⚠️ if duplicate"] --> AskInclude{Include? y/N}
+        AskInclude -- N --> SkipTab[Skip]
+        AskInclude -- Y --> KeywordMatch{Keyword<br/>heuristic<br/>matched?}
+        KeywordMatch -- Yes --> SuggestKeyword["Suggest category<br/>from keywords"]
+        KeywordMatch -- "No → other" --> HasAI{AI configured?}
+        HasAI -- No --> FallbackOther["Suggest 'other'"]
+        HasAI -- Yes --> CallAI[/"🤖 Call LLM<br/>OpenAI · Anthropic"/]
+        CallAI --> ValidCat{Valid<br/>category?}
+        ValidCat -- Yes --> SuggestAI["Suggest AI category"]
+        ValidCat -- No --> FallbackOther
+        SuggestKeyword --> AskCategory
+        SuggestAI --> AskCategory
+        FallbackOther --> AskCategory
+        AskCategory["Show suggestion + category list<br/>Category [suggestion]: _"] --> UserOverride{User types<br/>override?}
+        UserOverride -- "Enter (accept)" --> Collect["Add to collected links"]
+        UserOverride -- "Types valid category" --> Collect
+        SkipTab --> MoreTabs
+        Collect --> MoreTabs{More tabs?}
+        MoreTabs -- Yes --> NextTab
+    end
+
+    MoreTabs -- No --> HasCollected{Any links<br/>collected?}
+    HasCollected -- No --> NothingSaved([Nothing to save])
+    HasCollected -- Yes --> SaveJSON["💾 Save JSON locally<br/>output/links_TIMESTAMP.json"]
+    SaveJSON --> ShowBatch["📦 Show batch summary"]
+    ShowBatch --> ConfirmPost{POST to Supabase? y/N}
+    ConfirmPost -- N --> DoneLocal([Done — JSON saved locally])
+    ConfirmPost -- Y --> PostLinks[/"POST /insert-links<br/>Send collected links"/]
+    PostLinks --> Done([✅ N link·s posted])
+
+    style Start fill:#4ade80,color:#000
+    style Done fill:#4ade80,color:#000
+    style DoneLocal fill:#facc15,color:#000
+    style NoTabs fill:#f87171,color:#000
+    style NothingSaved fill:#f87171,color:#000
+    style CallAI fill:#818cf8,color:#fff
+    style FetchExisting fill:#38bdf8,color:#000
+    style FetchTabs fill:#38bdf8,color:#000
+    style PostLinks fill:#38bdf8,color:#000
+    style loop fill:none,stroke:#64748b,stroke-width:1px,stroke-dasharray: 5 5
