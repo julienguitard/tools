@@ -22,7 +22,7 @@ $(VENV)/bin/activate: requirements.txt
 FILE ?= family.pl
 
 run: setup
-	@set -a && . ./.env && set +a && \
+	@set -a && . ../.env && set +a && \
 	$(PYTHON) -m query_prolog $(FILE)
 
 # -- Housekeeping ---------------------------------------------------------

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import os
-import re
 import textwrap
 from pathlib import Path
 
-from .domain import FactFile, InputMode
+from .domain import FactFile, QueryResult
 from .ports import PrologEngine, QueryTranslator, UserInterface
 
 
@@ -49,33 +48,31 @@ class QueryFactsUseCase:
                 self._handle_command(text)
                 continue
 
-            # ── Detect mode ──────────────────────────────────────────
-            mode = self._detect_mode(text)
+            # ── Strip Prolog prompt prefix ────────────────────────────
+            if text.startswith("?-"):
+                text = text[2:].strip()
 
-            if mode == InputMode.NATURAL:
+            # ── Try as Prolog first ──────────────────────────────────
+            prolog_query = text.rstrip(".")
+            result = self._engine.query(self._facts, prolog_query)
+
+            if self._is_syntax_error(result):
                 if not self._translator:
                     self._ui.show_message("No AI configured. Use Prolog syntax or set AI_PROVIDER in .env")
                     continue
                 self._ui.show_message("Translating to Prolog...")
                 prolog_query = self._translator.translate(text, self._facts)
                 self._ui.show_translation(prolog_query)
-            else:
-                prolog_query = text
-                prolog_query = prolog_query.rstrip(".")
+                result = self._engine.query(self._facts, prolog_query)
 
-            result = self._engine.query(self._facts, prolog_query)
             self._ui.show_result(result)
 
     @staticmethod
-    def _detect_mode(text: str) -> str:
-        """Heuristic: if it looks like Prolog syntax, treat as direct query."""
-        if re.match(r"^[a-z_]\w*\s*\(", text):
-            return InputMode.PROLOG
-        if any(op in text for op in [":-", "\\+", "is ", "=:=", "=\\=", "\\="]):
-            return InputMode.PROLOG
-        if text.startswith("?-"):
-            return InputMode.PROLOG
-        return InputMode.NATURAL
+    def _is_syntax_error(result: QueryResult) -> bool:
+        """Check if a query result indicates a Prolog syntax error."""
+        if not result.error:
+            return False
+        return "Syntax error" in result.error
 
     def _handle_command(self, text: str) -> None:
         cmd = text.lower()

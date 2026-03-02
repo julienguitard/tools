@@ -20,7 +20,7 @@ $EDITOR .env
 
 ```bash
 # Query the included example file
-make run FILE=family.pl
+make run FILE=.data/family.pl
 
 # Query any .pl file
 make run FILE=/path/to/facts.pl
