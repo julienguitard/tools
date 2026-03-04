@@ -1,0 +1,75 @@
+flowchart TD
+    Start([Start]) --> ParseArgs[Parse CLI arguments<br/>folder · --dry-run · --model]
+    ParseArgs --> LoadEnv[Load .env config]
+    LoadEnv --> ValidDir{folder is<br/>a directory?}
+
+    ValidDir -- No --> ErrDir[Print error]:::error --> Exit1([Exit 1])
+    ValidDir -- Yes --> HasKey{OPENAI_API_KEY<br/>set?}
+
+    HasKey -- No --> ErrKey[Print error]:::error --> Exit1
+    HasKey -- Yes --> Wire[make_renamer:<br/>LocalFileSystem · PyMuPdfReader · OpenAiSlugGenerator]
+
+    Wire --> ListPDFs[[FileSystem.list_pdfs]]
+    ListPDFs --> PrintFound[Print: Found N PDF·s]
+
+    subgraph Plan ["plan() — read-only"]
+        direction TB
+        PlanLoop{{For each PDF}}
+
+        PlanLoop --> ParseID{ID prefix<br/>matches?}
+        ParseID -- No --> Skip1[RenameAction.skip<br/>no numeric ID]
+        ParseID -- Yes --> ExtractText[[PdfReader.extract_text<br/>max 5 pages · 4000 chars]]
+
+        ExtractText --> HasText{Text<br/>extracted?}
+        HasText -- No --> Skip2[RenameAction.skip<br/>no text extracted]
+        HasText -- Yes --> GenSlug[[SlugGenerator.generate<br/>OpenAI chat completions]]
+
+        GenSlug --> Sanitize[Article.sanitize_slug<br/>lowercase · snake_case · strip]
+        Sanitize --> BuildName[PaperFile.target_name<br/>ID_slug.pdf]
+        BuildName --> Dedup{Name<br/>already used?}
+
+        Dedup -- Yes --> AddCounter[Append _N suffix]
+        Dedup -- No --> Changed{New name !=<br/>original?}
+        AddCounter --> Changed
+
+        Changed -- Same --> Keep[RenameAction.keep<br/>already correct]
+        Changed -- Different --> Rename[RenameAction<br/>source + new_name]
+
+        Skip1 --> PlanLoop
+        Skip2 --> PlanLoop
+        Keep --> PlanLoop
+        Rename --> PlanLoop
+    end
+
+    PrintFound --> PlanLoop
+
+    subgraph Exec ["execute() — side effects"]
+        direction TB
+        ExecLoop{{For each action}}
+
+        ExecLoop --> IsSkipped{Skipped?}
+        IsSkipped -- Yes --> PrintSkip[Print skip reason]
+
+        IsSkipped -- No --> IsNoop{Is no-op?}
+        IsNoop -- Yes --> PrintNoop[Print: already correct]
+
+        IsNoop -- No --> DryRun{--dry-run?}
+        DryRun -- Yes --> PrintDry[Print: new_name ·dry-run·]
+
+        DryRun -- No --> Exists{Target exists<br/>on disk?}
+        Exists -- Yes --> PrintExists[Print: target exists, skip]
+        Exists -- No --> DoRename[[FileSystem.rename]]
+        DoRename --> PrintDone[Print: => new_name]
+
+        PrintSkip --> ExecLoop
+        PrintNoop --> ExecLoop
+        PrintDry --> ExecLoop
+        PrintExists --> ExecLoop
+        PrintDone --> ExecLoop
+    end
+
+    PlanLoop -- Done --> ExecLoop
+    ExecLoop -- Done --> Done[Print: Done.]
+    Done --> Exit0([Exit 0])
+
+    classDef error fill:#ffebee,stroke:#c62828

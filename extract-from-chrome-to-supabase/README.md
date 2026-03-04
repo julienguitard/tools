@@ -33,7 +33,7 @@ extract-from-chrome-to-supabase/
 ├── .env.example              # Template — copy to .env
 ├── Makefile                  # setup / run / clean targets
 ├── requirements.txt
-├── ux-flow.mermaid           # Workflow diagram
+├── ux-flow.mmd               # UX flow diagram (Mermaid)
 └── chrome_to_supabase/       # Python package
     ├── __init__.py
     ├── __main__.py           # CLI entry point
@@ -109,6 +109,87 @@ class UserPrompter(Protocol):
 | `SupabaseLinkRepository` | `LinkRepository` | HTTP calls to Supabase edge functions |
 | `MockLinkRepository` | `LinkRepository` | Fake implementation for local testing |
 | `CliPrompter` | `UserPrompter` | Terminal-based interactive prompts |
+
+## UX Flow
+
+```mermaid
+flowchart TD
+    Start([Start]) --> LoadEnv[Load .env config]
+    LoadEnv --> Wire[make_curator:<br/>ChromeAppleScriptSource · ChainedCategorizer<br/>SupabaseLinkRepository / Mock · CliPrompter]
+
+    subgraph Step1 ["Step 1 — Fetch existing links"]
+        direction TB
+        FetchExisting[[LinkRepository.fetch_existing<br/>Supabase GET / Mock]]
+        FetchExisting --> ShowExisting[Print: N links already in Supabase]
+    end
+
+    Wire --> FetchExisting
+
+    subgraph Step2 ["Step 2 — Walk Chrome tabs"]
+        direction TB
+        FetchTabs[[ChromeAppleScriptSource.fetch_tabs<br/>osascript subprocess]]
+        FetchTabs --> HasTabs{Tabs found?}
+        HasTabs -- No --> NoTabs[Print: No Chrome tabs found] --> EarlyExit([Exit])
+
+        HasTabs -- Yes --> TabLoop{{For each tab}}
+        TabLoop --> PresentTab[Present tab<br/>index · title · URL · duplicate flag]
+        PresentTab --> AskInclude([Include? Y/N])
+
+        AskInclude -- No --> TabLoop
+        AskInclude -- Yes --> Categorize
+
+        subgraph Categorize ["Chained categorizer"]
+            direction TB
+            Keyword[KeywordCategorizer<br/>25 rule sets · offline]
+            Keyword --> IsOther{Result is<br/>other?}
+            IsOther -- No --> UseSuggestion[Use keyword match]
+            IsOther -- Yes --> HasAI{AI configured?}
+            HasAI -- No --> FallbackOther[Default: other]
+            HasAI -- Yes --> AskAI[[AiCategorizer<br/>LLM API · 15s timeout]]
+            AskAI --> ValidCat{Valid<br/>category?}
+            ValidCat -- Yes --> UseAI[Use AI suggestion]
+            ValidCat -- No --> FallbackOther
+        end
+
+        UseSuggestion --> ShowSuggestion
+        UseAI --> ShowSuggestion
+        FallbackOther --> ShowSuggestion
+
+        ShowSuggestion[Show suggested category<br/>list 26 options]
+        ShowSuggestion --> AskCategory([Category override?])
+
+        AskCategory -- Enter --> AcceptSuggestion[Accept suggestion]
+        AskCategory -- valid input --> OverrideCat[Use override]
+        AskCategory -- invalid input --> WarnInvalid[Warn · use suggestion]
+
+        AcceptSuggestion --> CollectLink[Collect Link<br/>url + category]
+        OverrideCat --> CollectLink
+        WarnInvalid --> CollectLink
+        CollectLink --> TabLoop
+    end
+
+    ShowExisting --> FetchTabs
+
+    subgraph Step3 ["Step 3 — Save & POST"]
+        direction TB
+        HasLinks{Links<br/>collected?}
+        HasLinks -- No --> NothingToSave[Print: Nothing to save] --> Done([Exit])
+
+        HasLinks -- Yes --> SaveJSON[Save JSON locally<br/>output/links_TIMESTAMP.json]
+        SaveJSON --> PrintJSON[Print: JSON saved to path]
+        PrintJSON --> ShowBatch[Show batch summary<br/>category · URL for each link]
+        ShowBatch --> ConfirmPost([POST to Supabase? Y/N])
+
+        ConfirmPost -- No --> SkipPost([Exit · JSON preserved])
+        ConfirmPost -- Yes --> PostLinks[[LinkRepository.save_links<br/>Supabase POST / Mock]]
+        PostLinks --> ReportPosted[Print: N links posted]
+        ReportPosted --> Done
+    end
+
+    TabLoop -- Done --> HasLinks
+
+    classDef error fill:#ffebee,stroke:#c62828
+```
 
 ## Dependencies
 
