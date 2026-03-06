@@ -48,15 +48,21 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT,
         help=f"Output Markdown file path (default: {DEFAULT_OUTPUT})",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print diagram to stdout without writing the output file.",
+    )
     return parser.parse_args()
 
 
-def run(sql_root: Path, output: Path) -> None:
+def run(sql_root: Path, output: Path, *, dry_run: bool = False) -> None:
     """Discover, parse, build graph, and render diagram.
 
     Args:
         sql_root: Root directory containing SQL files.
         output: Path to write the Markdown output.
+        dry_run: If True, print to stdout instead of writing the file.
     """
     discoverer = GlobSqlFileDiscoverer()
     parser = RegexSqlParser()
@@ -77,14 +83,19 @@ def run(sql_root: Path, output: Path) -> None:
     print(f"Graph: {len(graph.nodes)} nodes, {len(graph.edges)} edges")
 
     markdown = renderer.render(graph)
-    output.write_text(markdown, encoding="utf-8")
-    print(f"Diagram written to {output}")
+
+    if dry_run:
+        print(markdown)
+        print(f"\n(dry-run) Would write to {output}")
+    else:
+        output.write_text(markdown, encoding="utf-8")
+        print(f"Diagram written to {output}")
 
 
 def main() -> None:
     """Entry point."""
     args = parse_args()
-    run(args.sql_root, args.output)
+    run(args.sql_root, args.output, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

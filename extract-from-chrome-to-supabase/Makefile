@@ -1,4 +1,4 @@
-.PHONY: setup run clean
+.PHONY: setup run dry-run clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -20,8 +20,12 @@ $(VENV)/bin/activate: requirements.txt
 # -- Run ------------------------------------------------------------------
 
 run: setup
-	@set -a && . ./.env && set +a && \
+	@set -a && . ../.env && set +a && \
 	$(PYTHON) -m extract_from_chrome_to_supabase
+
+dry-run: setup
+	@set -a && . ../.env && set +a && \
+	$(PYTHON) -m extract_from_chrome_to_supabase --dry-run
 
 # -- Housekeeping ---------------------------------------------------------
 

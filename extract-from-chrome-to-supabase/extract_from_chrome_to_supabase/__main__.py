@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import dotenv
@@ -13,11 +14,17 @@ dotenv.load_dotenv(_ROOT_ENV)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extract Chrome tabs, categorize, and POST to Supabase.",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Preview without writing files or posting.")
+    args = parser.parse_args()
+
     output_dir = Path(__file__).resolve().parent.parent / "output"
     output_dir.mkdir(exist_ok=True)
 
     use_case = make_curator(output_dir=output_dir)
-    use_case.execute()
+    use_case.execute(dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

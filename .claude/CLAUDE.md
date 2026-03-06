@@ -51,6 +51,7 @@ tool_name/
 ### Optional patterns (use when appropriate)
 
 - **Service as port orchestration** — service methods read as high-level scripts that compose port calls; the ports form a domain-specific vocabulary that the service "narrates."
+- **Dry-run mode** — every tool with write side effects exposes a `--dry-run` CLI flag. In dry-run, all reads execute normally (filesystem, network GETs, AI calls) but writes (file creation, HTTP POSTs, renames) are suppressed — output goes to stdout instead. Implementation varies: plan/execute split (`rename-papers`), conditional in `execute()` (`extract-from-chrome-to-supabase`, `generate_data_diagram`). Tools that are already read-only (`query-prolog`) need no flag.
 - **Plan-then-execute** — When **relevant** service exposes a read-only `plan()` and a side-effectful `execute()`; enables dry-run previews (see `rename-papers`).
 - **Chained adapters** — compose multiple implementations behind a single port (e.g., keyword heuristic → AI fallback in `extract-from-chrome-to-supabase`).
 - **Interactive ports** — a `UserInterface` / `UserPrompter` protocol abstracts CLI interaction for REPL or multi-step workflows (see `query-prolog`, `extract-from-chrome-to-supabase`).

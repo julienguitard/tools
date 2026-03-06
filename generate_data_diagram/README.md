@@ -21,8 +21,12 @@ make setup
 # Default paths (sql-root and output configured in script)
 make run
 
+# Preview: print Mermaid to stdout without writing the output file
+make dry-run
+
 # Custom paths
-python -m generate_data_diagram --sql-root /path/to/sql --output diagram.md
+python generate_data_diagram/generate.py --sql-root /path/to/sql --output diagram.md
+python generate_data_diagram/generate.py --sql-root /path/to/sql --dry-run
 ```
 
 ## UX Flow

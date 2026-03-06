@@ -17,7 +17,8 @@ $EDITOR .env
 ## Usage
 
 ```bash
-make run
+make run          # Full run: curate tabs, save JSON, POST to Supabase
+make dry-run      # Preview: curate tabs, print JSON to stdout, skip writes
 ```
 
 The interactive workflow:

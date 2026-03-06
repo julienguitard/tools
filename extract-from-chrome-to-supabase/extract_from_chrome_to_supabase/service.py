@@ -30,7 +30,7 @@ class CurateTabsUseCase:
 
     # -- execution (writes) --------------------------------------------------
 
-    def execute(self) -> None:
+    def execute(self, *, dry_run: bool = False) -> None:
         # ── Step 1: fetch existing links ─────────────────────────────
         existing = self._repo.fetch_existing()
         self._ui.show_existing(existing)
@@ -58,9 +58,18 @@ class CurateTabsUseCase:
             self._ui.report_skip()
             return
 
+        # -- write phase (skipped in dry-run) ─────────────────────────
+        payload = [link.to_dict() for link in collected]
+
+        if dry_run:
+            print("\n(dry-run) Would save JSON:\n")
+            print(json.dumps(payload, indent=2))
+            self._ui.confirm_batch(collected)
+            print("\n(dry-run) Skipping file write and Supabase POST.")
+            return
+
         # Save JSON locally
         out_path = self._output_dir / f"links_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
-        payload = [link.to_dict() for link in collected]
         out_path.write_text(json.dumps(payload, indent=2))
         self._ui.report_saved_json(out_path)
 
