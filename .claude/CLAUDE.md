@@ -51,14 +51,14 @@ tool_name/
 ### Optional patterns (use when appropriate)
 
 - **Service as port orchestration** — service methods read as high-level scripts that compose port calls; the ports form a domain-specific vocabulary that the service "narrates."
-- **Plan-then-execute** — service exposes a read-only `plan()` and a side-effectful `execute()`; enables dry-run previews (see `rename-papers`).
+- **Plan-then-execute** — When **relevant** service exposes a read-only `plan()` and a side-effectful `execute()`; enables dry-run previews (see `rename-papers`).
 - **Chained adapters** — compose multiple implementations behind a single port (e.g., keyword heuristic → AI fallback in `extract-from-chrome-to-supabase`).
 - **Interactive ports** — a `UserInterface` / `UserPrompter` protocol abstracts CLI interaction for REPL or multi-step workflows (see `query-prolog`, `extract-from-chrome-to-supabase`).
 
 ### Environment configuration
 
 - All tools use `.env` + `python-dotenv` (loaded in `__main__.py`).
-- Common variables: `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_*`.
+- Common variables: `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_API_KEY`, `SUPABASE_*`.
 - Each tool ships an `.env.example` with all required keys.
 
 ## Coding style

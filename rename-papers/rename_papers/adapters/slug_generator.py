@@ -1,7 +1,7 @@
 """Slug generation backed by the OpenAI chat completions API."""
 
 from __future__ import annotations
-
+import os
 from ..domain import Article
 
 
@@ -26,7 +26,7 @@ class OpenAiSlugGenerator:
     def __init__(self, model: str = "gpt-4o-mini"):
         from openai import OpenAI  # lazy import
 
-        self._client = OpenAI()
+        self._client = OpenAI(api_key=os.getenv("AI_API_KEY"))
         self._model = model
 
     def generate(self, text: str) -> str:

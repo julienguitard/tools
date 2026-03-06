@@ -26,8 +26,8 @@ def main() -> None:
     if not args.folder.is_dir():
         print(f"Error: {args.folder} is not a directory.", file=sys.stderr)
         sys.exit(1)
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY environment variable not set.", file=sys.stderr)
+    if not os.environ.get("AI_API_KEY"):
+        print("Error: AI_API_KEY environment variable not set.", file=sys.stderr)
         sys.exit(1)
 
     renamer = make_renamer(model=args.model)

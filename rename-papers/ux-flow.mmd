@@ -4,7 +4,7 @@ flowchart TD
     LoadEnv --> ValidDir{folder is<br/>a directory?}
 
     ValidDir -- No --> ErrDir[Print error]:::error --> Exit1([Exit 1])
-    ValidDir -- Yes --> HasKey{OPENAI_API_KEY<br/>set?}
+    ValidDir -- Yes --> HasKey{AI_API_KEY<br/>set?}
 
     HasKey -- No --> ErrKey[Print error]:::error --> Exit1
     HasKey -- Yes --> Wire[make_renamer:<br/>LocalFileSystem · PyMuPdfReader · OpenAiSlugGenerator]
