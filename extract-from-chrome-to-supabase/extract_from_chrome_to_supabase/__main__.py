@@ -23,7 +23,7 @@ def main() -> None:
     output_dir = Path(__file__).resolve().parent.parent / ".data"
     output_dir.mkdir(exist_ok=True)
 
-    use_case = make_curator(output_dir=output_dir)
+    use_case = make_curator(output_dir=output_dir, dry_run=args.dry_run)
     use_case.execute(dry_run=args.dry_run)
 
 

@@ -79,7 +79,7 @@ class CurateTabsUseCase:
             self._ui.report_posted(len(collected))
 
 
-def make_curator(output_dir: Path) -> CurateTabsUseCase:
+def make_curator(output_dir: Path, *, dry_run: bool = False) -> CurateTabsUseCase:
     """Wire concrete adapters into the service."""
     import sys
 
@@ -94,7 +94,7 @@ def make_curator(output_dir: Path) -> CurateTabsUseCase:
 
     base_url = os.getenv("SUPABASE_URL", "https://YOUR_PROJECT_ID.supabase.co")
     api_key = os.getenv("SUPABASE_KEY", "")
-    mock = os.getenv("MOCK", "true").lower() == "true"
+    mock = dry_run or os.getenv("MOCK", "true").lower() == "true"
 
     tab_source = ChromeAppleScriptSource()
 
