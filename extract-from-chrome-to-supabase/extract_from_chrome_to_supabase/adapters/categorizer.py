@@ -11,7 +11,7 @@ class KeywordCategorizer:
     _RULES: list[tuple[list[str], str]] = [
         (["llm", "gpt", "openai", "anthropic", "gemini", "llama", "mistral", "genai", "chatgpt", "copilot", "prompt engineer"], "generative_ai"),
         (["deep learning", "pytorch", "tensorflow", "neural net", "cnn", "rnn", "transformer architecture"], "deep_learning"),
-        (["mlflow", "sklearn", "scikit", "ml_model", "reinforcement", "ml ", "machine learning", "feature store"], "machine_learning"),
+        (["mlflow", "sklearn", "scikit", "xgboost", "reinforcement", "ml ", "machine learning", "feature store"], "machine_learning"),
         (["artificial intelligence", " ai ", "ai-", "agi"], "artificial_intelligence"),
         (["postgres", "sql", "database", "supabase", "redis", "mongo", "duckdb", "clickhouse", "sqlite"], "database"),
         (["ontolog", "owl ", "rdf", "protégé"], "ontologies"),
