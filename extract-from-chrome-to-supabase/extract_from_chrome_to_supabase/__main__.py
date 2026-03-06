@@ -8,7 +8,8 @@ import dotenv
 
 from .service import make_curator
 
-dotenv.load_dotenv()
+_ROOT_ENV = Path(__file__).resolve().parent.parent.parent / ".env"
+dotenv.load_dotenv(_ROOT_ENV)
 
 
 def main() -> None:
