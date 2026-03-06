@@ -92,8 +92,8 @@ def make_curator(output_dir: Path, *, dry_run: bool = False) -> CurateTabsUseCas
     )
     from .adapters.categorizer import AiCategorizer, KeywordCategorizer
 
-    base_url = os.getenv("SUPABASE_URL", "https://YOUR_PROJECT_ID.supabase.co")
-    api_key = os.getenv("SUPABASE_KEY", "")
+    base_url = os.getenv("SUPABASE_URL", "")
+    api_key = os.getenv("SUPABASE_API_KEY", "")
     mock = dry_run or os.getenv("MOCK", "true").lower() == "true"
 
     tab_source = ChromeAppleScriptSource()
@@ -102,8 +102,8 @@ def make_curator(output_dir: Path, *, dry_run: bool = False) -> CurateTabsUseCas
     if mock:
         repository = MockLinkRepository()
     else:
-        if not api_key:
-            print("SUPABASE_KEY must be set in .env when MOCK=false")
+        if not base_url or not api_key:
+            print("SUPABASE_URL and SUPABASE_API_KEY must be set in .env when MOCK=false")
             sys.exit(1)
         repository = SupabaseLinkRepository(base_url, api_key)
 
