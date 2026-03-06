@@ -158,7 +158,7 @@ Extend Model protocol with optional batch_predict() for
 large-scale inference without memory issues.
 
 - Add batch_predict(X, batch_size) -> Iterator[pd.Series]
-- Default implementation in ML ModelModel (1000 rows/batch)
+- Default implementation in GradientBoostModel (1000 rows/batch)
 - MockModel returns random batches for testing
 
 Backward compatible: batch_predict has default None implementation.

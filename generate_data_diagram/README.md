@@ -75,7 +75,7 @@ flowchart TD
 
     PrintGraph --> Render[[MermaidRenderer.render]]
     Render --> GroupNodes[Group nodes by layer_subgroup]
-    GroupNodes --> RenderSub[Render nested subgraphs<br/>Raw → Bronze → Silver → Gold → Plat]
+    GroupNodes --> RenderSub[Render nested subgraphs<br/>Raw → Bronze → Silver → Gold → Platinum]
     RenderSub --> RenderEdges[Render edges<br/>solid = CREATE · dashed = INSERT/MERGE]
     RenderEdges --> RenderStyles[Render classDef styles<br/>color per layer]
     RenderStyles --> RenderLegend[Append legend table]

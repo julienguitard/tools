@@ -28,15 +28,15 @@ SUBGRAPH_CONFIGS: dict[str, SubgraphConfig] = {
         "#c0c0c0", "#808080", "#333",
     ),
     "gold_pipeline_1": SubgraphConfig(
-        "GOLD_Pipeline 1", "Pipeline 1 \u2014 Market Share Anomalies", "LR",
+        "GOLD_P1", "Pipeline 1 \u2014 Market Share Anomalies", "LR",
         "#ffd700", "#daa520", "#333",
     ),
     "gold_pipeline_2": SubgraphConfig(
-        "GOLD_Pipeline 2", "Pipeline 2 \u2014 Emerging Trends", "",
+        "GOLD_P2", "Pipeline 2 \u2014 Emerging Trends", "",
         "#ffd700", "#daa520", "#333",
     ),
     "gold_pipeline_3": SubgraphConfig(
-        "GOLD_Pipeline 3", "Pipeline 3 \u2014 Seasonality", "",
+        "GOLD_P3", "Pipeline 3 \u2014 Seasonality", "",
         "#ffd700", "#daa520", "#333",
     ),
     "gold_ml_model": SubgraphConfig(
@@ -44,19 +44,19 @@ SUBGRAPH_CONFIGS: dict[str, SubgraphConfig] = {
         "#ffd700", "#daa520", "#333",
     ),
     "platinum_pipeline_1": SubgraphConfig(
-        "PLAT_Pipeline 1", "Pipeline 1 Pipeline (tmp)", "LR",
+        "PLAT_P1", "Pipeline 1 (tmp)", "LR",
         "#d4edda", "#28a745", "#333",
     ),
     "platinum_pipeline_2": SubgraphConfig(
-        "PLAT_Pipeline 2", "Pipeline 2 Pipeline (tmp)", "LR",
+        "PLAT_P2", "Pipeline 2 (tmp)", "LR",
         "#d4edda", "#28a745", "#333",
     ),
     "platinum_pipeline_4": SubgraphConfig(
-        "PLAT_Pipeline 4", "Pipeline 4 \u2014 Churn", "",
+        "PLAT_P4", "Pipeline 4 \u2014 Churn", "",
         "#d4edda", "#28a745", "#333",
     ),
     "platinum_shared": SubgraphConfig(
-        "PLAT_SHARED", "Shared Opportunity Tables", "LR",
+        "PLAT_SHARED", "Shared Platinum Tables", "LR",
         "#28a745", "#155724", "#fff",
     ),
 }
@@ -444,8 +444,8 @@ def render_legend() -> list[str]:
         "| **Bronze** | Bronze | Persistent cleaned/typed tables |",
         "| Silver | Silver | Enriched business logic tables |",
         "| Gold | Gold | Aggregated analytics-ready tables by use case |",
-        "| Light green | Platinum tmp | UC-specific intermediate tables |",
-        "| **Green** | Platinum shared | Final opportunity EAV tables |",
+        "| Light green | Platinum tmp | Pipeline-specific intermediate tables |",
+        "| **Green** | Platinum shared | Final EAV tables |",
         "",
         "- **Solid arrows** \u2192 CREATE OR REPLACE (build dependency)",
         "- **Dashed arrows** \u2192 INSERT INTO (append to existing table)",

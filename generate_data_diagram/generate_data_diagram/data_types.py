@@ -35,7 +35,8 @@ class TableNode:
         layer: Medallion layer ("raw", "bronze", "silver", "gold",
             "platinum").
         subgroup: Sub-classification within a layer ("tmp", "persistent",
-            "core", "ml_model", "pipeline_1", "pipeline_2", "pipeline_3", "pipeline_4", "shared").
+            "core", "ml_model", "pipeline_1", "pipeline_2", "pipeline_3",
+            "pipeline_4", "shared").
         is_tmp: True when dataset ends with "_tmp".
     """
 
