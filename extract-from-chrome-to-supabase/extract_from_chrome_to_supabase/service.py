@@ -64,8 +64,8 @@ class CurateTabsUseCase:
         if dry_run:
             print("\n(dry-run) Would save JSON:\n")
             print(json.dumps(payload, indent=2))
-            self._ui.confirm_batch(collected)
-            print("\n(dry-run) Skipping file write and Supabase POST.")
+            print(f"\n(dry-run) {len(collected)} link(s) collected. "
+                  "Skipping file write and Supabase POST.")
             return
 
         # Save JSON locally
