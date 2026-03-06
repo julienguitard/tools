@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing files or posting.")
     args = parser.parse_args()
 
-    output_dir = Path(__file__).resolve().parent.parent / "output"
+    output_dir = Path(__file__).resolve().parent.parent / ".data"
     output_dir.mkdir(exist_ok=True)
 
     use_case = make_curator(output_dir=output_dir)
