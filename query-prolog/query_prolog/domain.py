@@ -17,6 +17,7 @@ class FactFile:
 
     @classmethod
     def load(cls, path: Path) -> FactFile:
+        """Load a Prolog fact file and extract its predicate signatures."""
         content = path.read_text()
         predicates = cls._extract_predicates(content)
         return cls(path=path, content=content, predicates=predicates)
@@ -38,6 +39,7 @@ class FactFile:
         return sorted(seen.keys())
 
     def summary(self) -> str:
+        """Return a human-readable summary with predicates and sample facts."""
         lines = [f"{self.path.name}"]
         lines.append(f"   Predicates: {', '.join(self.predicates) if self.predicates else '(none detected)'}")
         examples = [l.strip() for l in self.content.splitlines()
@@ -50,7 +52,7 @@ class FactFile:
         return "\n".join(lines)
 
 
-@dataclass
+@dataclass(frozen=True)
 class QueryResult:
     """Result of executing a Prolog query."""
 
@@ -60,6 +62,7 @@ class QueryResult:
     error: str = ""
 
     def display(self) -> str:
+        """Format the query result for terminal display."""
         if self.error:
             return f"Error: {self.error}"
         if not self.success:
@@ -71,10 +74,3 @@ class QueryResult:
             parts = [f"{k} = {v}" for k, v in b.items()]
             lines.append(", ".join(parts))
         return "\n".join(lines)
-
-
-class InputMode:
-    """Constants for input mode detection."""
-
-    PROLOG = "prolog"
-    NATURAL = "natural"

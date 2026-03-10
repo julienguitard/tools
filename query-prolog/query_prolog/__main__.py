@@ -14,6 +14,7 @@ dotenv.load_dotenv(_ROOT_ENV)
 
 
 def main() -> None:
+    """Parse CLI arguments and start the Prolog query REPL."""
     if len(sys.argv) < 2:
         print("Usage: python -m query_prolog <file.pl>")
         print("       python -m query_prolog family.pl")

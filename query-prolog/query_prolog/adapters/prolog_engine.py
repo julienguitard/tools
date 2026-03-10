@@ -15,6 +15,7 @@ class SwiPrologEngine:
         self._swipl = swipl_path
 
     def query(self, fact_file: FactFile, prolog_query: str) -> QueryResult:
+        """Execute a Prolog query via SWI-Prolog subprocess."""
         variables = self._extract_variables(prolog_query)
 
         if variables:

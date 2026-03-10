@@ -1,6 +1,8 @@
 """Mermaid.js diagram renderer — pure formatting, no SQL knowledge."""
 
-from data_types import DependencyGraph, SubgraphConfig, TableNode
+from __future__ import annotations
+
+from ..data_types import DependencyGraph, SubgraphConfig, TableNode
 
 # ─── Subgraph layout configuration ──────────────────────────────────────────
 # Nesting structure mirrors the medallion architecture.

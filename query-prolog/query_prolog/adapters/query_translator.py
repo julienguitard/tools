@@ -14,6 +14,7 @@ class AiQueryTranslator:
         self._model = model
 
     def translate(self, natural_query: str, fact_file: FactFile) -> str:
+        """Translate natural language to Prolog using the configured LLM."""
         prompt = (
             f"You are a Prolog expert. Given the following Prolog fact file, "
             f"translate the natural language query into a valid SWI-Prolog query.\n\n"

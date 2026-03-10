@@ -23,7 +23,7 @@ class OpenAiSlugGenerator:
         "  moore_law_for_slacking\n"
     )
 
-    def __init__(self, model: str = "gpt-4o-mini"):
+    def __init__(self, model: str = "gpt-4o-mini") -> None:
         from openai import OpenAI  # lazy import
 
         self._client = OpenAI(api_key=os.getenv("AI_API_KEY"))

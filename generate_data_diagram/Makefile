@@ -1,14 +1,20 @@
-.PHONY: run dry-run clean
+.PHONY: setup run dry-run clean
 
 SQL_ROOT ?= ../../src/databases/tables
 
+# -- Setup ----------------------------------------------------------------
+
+setup:
+	@echo "No dependencies — stdlib only."
+	@test -f ./.env || cp ./.env.example ./.env
+
 # -- Run ------------------------------------------------------------------
 
-run:
-	python3 generate_data_diagram/generate.py --sql-root $(SQL_ROOT)
+run: setup
+	python3 -m generate_data_diagram --sql-root $(SQL_ROOT)
 
-dry-run:
-	python3 generate_data_diagram/generate.py --sql-root $(SQL_ROOT) --dry-run
+dry-run: setup
+	python3 -m generate_data_diagram --sql-root $(SQL_ROOT) --dry-run
 
 # -- Housekeeping ---------------------------------------------------------
 

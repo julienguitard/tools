@@ -20,10 +20,14 @@ class PaperRenamer:
         fs: FileSystem,
         reader: PdfReader,
         slugger: SlugGenerator,
-    ):
+    ) -> None:
         self._fs = fs
         self._reader = reader
         self._slugger = slugger
+
+    def list_pdfs(self, folder: Path) -> list[Path]:
+        """Delegate PDF listing to the filesystem port."""
+        return self._fs.list_pdfs(folder)
 
     # -- planning (read-only) ------------------------------------------------
 

@@ -1,10 +1,12 @@
 """Data structures for the SQL dependency diagram generator."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class ParsedStatement:
     """One SQL statement extracted from a file.
 
@@ -22,7 +24,7 @@ class ParsedStatement:
     source_file: Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class TableNode:
     """A table in the dependency graph.
 
@@ -48,7 +50,7 @@ class TableNode:
     is_tmp: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class DependencyEdge:
     """A directed dependency between two tables.
 
@@ -63,7 +65,7 @@ class DependencyEdge:
     edge_type: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class DependencyGraph:
     """Complete dependency graph of the pipeline.
 
@@ -76,7 +78,7 @@ class DependencyGraph:
     edges: list[DependencyEdge] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SubgraphConfig:
     """Rendering configuration for a Mermaid subgraph.
 

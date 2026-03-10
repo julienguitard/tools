@@ -51,5 +51,5 @@ class Link:
     url: str
     category: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return {"url": self.url, "category": self.category}

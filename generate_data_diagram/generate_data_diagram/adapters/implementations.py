@@ -1,9 +1,11 @@
 """Concrete implementations for SQL discovery, parsing, and graph building."""
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 
-from data_types import (
+from ..data_types import (
     DependencyEdge,
     DependencyGraph,
     ParsedStatement,
@@ -220,7 +222,7 @@ def compute_sources(all_tables: list[str], target: str) -> list[str]:
 class DependencyGraphBuilder:
     """Builds a DependencyGraph from parsed statements."""
 
-    def __init__(self, sql_root: Path | None = None):
+    def __init__(self, sql_root: Path | None = None) -> None:
         """Initialize the builder.
 
         Args:
@@ -236,41 +238,42 @@ class DependencyGraphBuilder:
             statements: All parsed statements from all SQL files.
 
         Returns:
-            Graph with nodes and edges.
+            Frozen graph with nodes and edges.
         """
-        graph = DependencyGraph()
+        nodes: dict[str, TableNode] = {}
+        edges: list[DependencyEdge] = []
         target_files = _build_target_files(statements)
         seen_edges: set[tuple[str, str, str]] = set()
         for ps in statements:
             if ps.target_table is None:
                 continue
-            self._ensure_node(graph, ps.target_table, target_files)
+            self._ensure_node(nodes, ps.target_table, target_files)
             for src in ps.source_tables:
-                self._ensure_node(graph, src, target_files)
+                self._ensure_node(nodes, src, target_files)
                 edge_key = (src, ps.target_table, ps.statement_type)
                 if edge_key not in seen_edges:
                     seen_edges.add(edge_key)
-                    graph.edges.append(DependencyEdge(
+                    edges.append(DependencyEdge(
                         source=src,
                         target=ps.target_table,
                         edge_type=ps.statement_type,
                     ))
-        return graph
+        return DependencyGraph(nodes=nodes, edges=edges)
 
     def _ensure_node(
         self,
-        graph: DependencyGraph,
+        nodes: dict[str, TableNode],
         full_name: str,
         target_files: dict[str, Path],
     ) -> None:
-        """Add a TableNode to the graph if not already present.
+        """Add a TableNode to the dict if not already present.
 
         Args:
-            graph: Graph to add the node to.
+            nodes: Mutable node accumulator.
             full_name: Fully qualified table name.
             target_files: Mapping of table names to their creating SQL file.
         """
-        if full_name in graph.nodes:
+        if full_name in nodes:
             return
         parts = full_name.split(".")
         dataset = parts[1] if len(parts) >= 3 else ""
@@ -278,7 +281,7 @@ class DependencyGraphBuilder:
         source_file = target_files.get(full_name)
         layer = infer_layer(short_name, source_file, self._sql_root)
         subgroup = infer_subgroup(layer, dataset, source_file, self._sql_root)
-        graph.nodes[full_name] = TableNode(
+        nodes[full_name] = TableNode(
             full_name=full_name,
             short_name=short_name,
             dataset=dataset,

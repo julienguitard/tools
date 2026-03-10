@@ -1,9 +1,11 @@
 """Protocol definitions for the SQL dependency diagram generator."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Protocol
 
-from data_types import DependencyGraph, ParsedStatement
+from .data_types import DependencyGraph, ParsedStatement
 
 
 class SqlFileDiscoverer(Protocol):

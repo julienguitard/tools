@@ -9,7 +9,7 @@ import dotenv
 
 from .service import make_curator
 
-_ROOT_ENV = Path(__file__).resolve().parent.parent.parent / ".env"
+_ROOT_ENV = Path(__file__).resolve().parent.parent / ".env"
 dotenv.load_dotenv(_ROOT_ENV)
 
 

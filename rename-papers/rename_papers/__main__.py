@@ -33,7 +33,7 @@ def main() -> None:
 
     renamer = make_renamer(model=args.model)
 
-    paths = renamer._fs.list_pdfs(args.folder)
+    paths = renamer.list_pdfs(args.folder)
     print(f"Found {len(paths)} PDF(s) in {args.folder}\n")
 
     actions = renamer.plan(args.folder)
