@@ -8,12 +8,10 @@ from dataclasses import dataclass
 from .domain import (
     ParseError,
     Term,
-    beta_reduce,
     beta_reduce_step,
     binding_vars,
     bound_vars,
     free_vars,
-    is_normal_form,
     parse,
     stringify,
 )
@@ -73,6 +71,21 @@ class ReplService:
 
     def _dispatch(self, raw: str) -> None:
         """Route input to the appropriate handler."""
+        # :let must be checked before pipe detection because the RHS may
+        # contain |> which _handle_let evaluates itself.
+        if raw.startswith(":"):
+            parts = raw.split(None, 1)
+            cmd = parts[0].lower()
+            if cmd == ":let":
+                self._handle_let(parts[1] if len(parts) > 1 else "")
+                return
+
+        if "|>" in raw:
+            result = self._eval_pipe(raw)
+            if result is not None:
+                self._ui.display(stringify(result))
+            return
+
         if not raw.startswith(":"):
             self._handle_expression(raw)
             return
@@ -100,8 +113,6 @@ class ReplService:
                 self._handle_binding(arg)
             case ":random":
                 self._handle_random(arg)
-            case ":let":
-                self._handle_let(arg)
             case ":list":
                 self._handle_list()
             case _:
@@ -130,13 +141,11 @@ class ReplService:
         if isinstance(result, ParseError):
             self._show_parse_error(arg, result)
             return
-        final, _trace, reached_nf = beta_reduce(
-            result, self._config.max_steps,
-        )
-        self._ui.display(stringify(final))
+        current, steps, reached_nf = self._reduce_interruptible(result)
+        self._ui.display(stringify(current))
         if not reached_nf:
             self._ui.display(
-                f"  (stopped after {self._config.max_steps} steps"
+                f"  (stopped after {steps} steps"
                 " — may not be in normal form)"
             )
 
@@ -164,15 +173,12 @@ class ReplService:
         if isinstance(result, ParseError):
             self._show_parse_error(arg, result)
             return
-        _final, trace, reached_nf = beta_reduce(
-            result, self._config.max_steps,
-        )
+        current, trace, reached_nf = self._trace_interruptible(result)
         for i, term in enumerate(trace):
             self._ui.display(f"  {i}: {stringify(term)}")
         if not reached_nf:
-            self._ui.display(
-                f"  (stopped after {self._config.max_steps} steps)"
-            )
+            steps = len(trace) - 1
+            self._ui.display(f"  (stopped after {steps} steps)")
 
     def _handle_free(self, arg: str) -> None:
         """Display the free variables of a term."""
@@ -229,19 +235,18 @@ class ReplService:
         self._ui.display(stringify(term))
 
     def _handle_let(self, arg: str) -> None:
-        """Bind a name to an expression."""
+        """Bind a name to an expression (supports pipes on RHS)."""
         if "=" not in arg:
             self._ui.display_error(":let requires 'name = expression'")
             return
-        name, expr = arg.split("=", 1)
+        name, rhs = arg.split("=", 1)
         name = name.strip()
-        expr = expr.strip()
+        rhs = rhs.strip()
         if not name:
             self._ui.display_error("missing name in :let")
             return
-        result = self._parse_with_names(expr)
-        if isinstance(result, ParseError):
-            self._show_parse_error(expr, result)
+        result = self._eval_pipe(rhs)
+        if result is None:
             return
         self._registry.bind(name, result)
         self._ui.display(f"  {name} = {stringify(result)}")
@@ -268,14 +273,183 @@ class ReplService:
               :binding <expr>     List binding variables (lambda params)
               :random [depth]     Generate a random closed term
               :let name = <expr>  Bind a name to an expression
+              :assert_eq <expr>   Assert piped term equals <expr> (pipe only)
               :list               Show all named terms
               :help               Show this help
               :quit               Exit
+
+            Pipes:
+              <expr> |> :cmd      Chain commands: (I a) |> :reduce |> :free
+              :let X = <expr> |> :reduce   Pipes work in :let RHS
 
             Syntax:
               \\x.body  or  λx.body     Abstraction (one variable)
               (func arg)                Application (explicit parens)
               x, foo                    Variable"""))
+
+    # -- pipe evaluation ------------------------------------------------------
+
+    def _eval_pipe(self, raw: str) -> Term | None:
+        """Evaluate a pipe expression, returning the final Term or None.
+
+        Splits on |>, evaluates left-to-right, threading Term values.
+        Returns None if a terminal command displayed output or on error.
+        """
+        segments = [s.strip() for s in raw.split("|>")]
+
+        # First segment: expression or :random.
+        first = segments[0]
+        current = self._eval_pipe_source(first)
+        if current is None:
+            return None
+
+        # Remaining segments: commands applied to the current Term.
+        for segment in segments[1:]:
+            if not segment.startswith(":"):
+                self._ui.display_error(
+                    f"expected :command in pipe, got '{segment}'"
+                )
+                return None
+            parts = segment.split(None, 1)
+            cmd = parts[0].lower()
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            result = self._eval_pipe_segment(cmd, arg, current)
+            if result is None:
+                return None
+            current = result
+
+        return current
+
+    def _eval_pipe_source(self, segment: str) -> Term | None:
+        """Evaluate the first segment of a pipe (a term source)."""
+        if segment.startswith(":"):
+            parts = segment.split(None, 1)
+            cmd = parts[0].lower()
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            if cmd == ":random":
+                depth = self._config.random_depth
+                if arg:
+                    try:
+                        depth = int(arg)
+                    except ValueError:
+                        self._ui.display_error(f"invalid depth: '{arg}'")
+                        return None
+                return self._generator.generate(depth)
+            self._ui.display_error(f"cannot start pipe with {cmd}")
+            return None
+        result = self._parse_with_names(segment)
+        if isinstance(result, ParseError):
+            self._show_parse_error(segment, result)
+            return None
+        return result
+
+    def _eval_pipe_segment(
+        self, cmd: str, arg: str, term: Term,
+    ) -> Term | None:
+        """Apply one pipe command to a Term.
+
+        Returns Term to continue the pipe, or None for terminals/errors.
+        """
+        match cmd:
+            case ":reduce":
+                current, _, _ = self._reduce_interruptible(term)
+                return current
+            case ":step":
+                stepped = beta_reduce_step(term)
+                return stepped if stepped is not None else term
+            case ":trace":
+                _, trace, reached_nf = self._trace_interruptible(term)
+                for i, t in enumerate(trace):
+                    self._ui.display(f"  {i}: {stringify(t)}")
+                if not reached_nf:
+                    self._ui.display(
+                        f"  (stopped after {len(trace) - 1} steps)"
+                    )
+                return trace[-1]
+            case ":free":
+                fv = free_vars(term)
+                self._ui.display(
+                    "{" + ", ".join(sorted(v.name for v in fv)) + "}"
+                )
+                return None
+            case ":bound":
+                bv = bound_vars(term)
+                self._ui.display(
+                    "{" + ", ".join(sorted(v.name for v in bv)) + "}"
+                )
+                return None
+            case ":binding":
+                biv = binding_vars(term)
+                self._ui.display(
+                    "{" + ", ".join(sorted(v.name for v in biv)) + "}"
+                )
+                return None
+            case ":assert_eq":
+                if not arg:
+                    self._ui.display_error(
+                        ":assert_eq requires an expected expression"
+                    )
+                    return None
+                expected = self._parse_with_names(arg)
+                if isinstance(expected, ParseError):
+                    self._show_parse_error(arg, expected)
+                    return None
+                if term == expected:
+                    self._ui.display("  ok")
+                else:
+                    self._ui.display_error(
+                        "assertion failed\n"
+                        f"  got:      {stringify(term)}\n"
+                        f"  expected: {stringify(expected)}"
+                    )
+                return None
+            case _:
+                self._ui.display_error(f"cannot pipe into {cmd}")
+                return None
+
+    # -- interruptible reduction (Ctrl+C safe) --------------------------------
+
+    def _reduce_interruptible(
+        self, term: Term,
+    ) -> tuple[Term, int, bool]:
+        """Step-by-step reduction loop that catches Ctrl+C.
+
+        Returns:
+            (final_term, step_count, reached_normal_form).
+        """
+        current = term
+        steps = 0
+        try:
+            for _ in range(self._config.max_steps):
+                next_term = beta_reduce_step(current)
+                if next_term is None:
+                    return current, steps, True
+                current = next_term
+                steps += 1
+        except KeyboardInterrupt:
+            pass
+        return current, steps, False
+
+    def _trace_interruptible(
+        self, term: Term,
+    ) -> tuple[Term, list[Term], bool]:
+        """Step-by-step trace loop that catches Ctrl+C.
+
+        Returns:
+            (final_term, trace, reached_normal_form).
+        """
+        trace: list[Term] = [term]
+        current = term
+        try:
+            for _ in range(self._config.max_steps):
+                next_term = beta_reduce_step(current)
+                if next_term is None:
+                    return current, trace, True
+                trace.append(next_term)
+                current = next_term
+        except KeyboardInterrupt:
+            pass
+        return current, trace, False
 
     # -- presentation helpers -------------------------------------------------
 
@@ -289,7 +463,7 @@ class ReplService:
 def make_repl(
     max_steps: int = 100, random_depth: int = 3,
 ) -> ReplService:
-    """Wire concrete adapters into the service.
+    """Wire concrete adapters into the service for interactive use.
 
     Args:
         max_steps: Maximum beta-reduction steps.
@@ -303,6 +477,32 @@ def make_repl(
     config = ReplConfig(max_steps=max_steps, random_depth=random_depth)
     return ReplService(
         ui=ReadlineUI(),
+        generator=RandomTermGenerator(),
+        registry=InMemoryNameRegistry(),
+        config=config,
+    )
+
+
+def make_script_repl(
+    lines: list[str],
+    max_steps: int = 100,
+    random_depth: int = 3,
+) -> ReplService:
+    """Wire concrete adapters for non-interactive script execution.
+
+    Args:
+        lines: Script lines to execute.
+        max_steps: Maximum beta-reduction steps.
+        random_depth: Default AST depth for :random.
+
+    Returns:
+        A fully wired ReplService ready to run.
+    """
+    from .adapters import InMemoryNameRegistry, RandomTermGenerator, ScriptUI
+
+    config = ReplConfig(max_steps=max_steps, random_depth=random_depth)
+    return ReplService(
+        ui=ScriptUI(lines),
         generator=RandomTermGenerator(),
         registry=InMemoryNameRegistry(),
         config=config,

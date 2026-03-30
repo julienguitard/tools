@@ -1,0 +1,24 @@
+# Lambda Calculus Exercises
+# Run with: python3 -m play_with_lambda --script examples/exercises.lam
+
+# Identity combinator
+(\x.x a) |> :reduce |> :assert_eq a
+
+# K combinator drops second argument
+((\x.\y.x a) b) |> :reduce |> :assert_eq a
+
+# Church numerals
+:let ONE = (SUCC ZERO) |> :reduce
+:let TWO = (SUCC ONE) |> :reduce
+:let THREE = (SUCC TWO) |> :reduce
+
+# Addition: 2 + 3 = 5
+:let FIVE = ((PLUS TWO) THREE) |> :reduce
+FIVE |> :trace
+
+# SKK = I (applied to a)
+(((S K) K) a) |> :reduce |> :assert_eq a
+
+# Boolean logic
+((AND TRUE) TRUE) |> :reduce |> :assert_eq TRUE
+((AND TRUE) FALSE) |> :reduce |> :assert_eq FALSE

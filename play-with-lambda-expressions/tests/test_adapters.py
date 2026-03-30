@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import unittest
 
-from play_with_lambda.adapters import InMemoryNameRegistry, RandomTermGenerator
+from play_with_lambda.adapters import (
+    InMemoryNameRegistry,
+    RandomTermGenerator,
+    ScriptUI,
+)
 from play_with_lambda.domain import Abs, ParseError, Var, is_closed, stringify, parse
 
 
@@ -73,6 +77,63 @@ class TestInMemoryNameRegistry(unittest.TestCase):
         names = reg.all_names()
         names["HACK"] = Var("x")
         assert reg.lookup("HACK") is None
+
+
+class TestScriptUI(unittest.TestCase):
+    """ScriptUI reads lines, skips comments and blanks."""
+
+    def test_reads_lines(self) -> None:
+        ui = ScriptUI(["x", "y"])
+        assert ui.read_input() == "x"
+        assert ui.read_input() == "y"
+        assert ui.read_input() is None
+
+    def test_skips_comments(self) -> None:
+        ui = ScriptUI(["# comment", "x", "  # indented comment", "y"])
+        assert ui.read_input() == "x"
+        assert ui.read_input() == "y"
+        assert ui.read_input() is None
+
+    def test_skips_blanks(self) -> None:
+        ui = ScriptUI(["", "  ", "x", ""])
+        assert ui.read_input() == "x"
+        assert ui.read_input() is None
+
+    def test_strips_whitespace(self) -> None:
+        ui = ScriptUI(["  :reduce x  "])
+        assert ui.read_input() == ":reduce x"
+
+
+class TestScriptExecution(unittest.TestCase):
+    """End-to-end script execution via make_script_repl."""
+
+    def test_script_with_pipes_and_assert(self) -> None:
+        from play_with_lambda.service import make_script_repl
+
+        lines = [
+            "# Church numerals exercise",
+            r":let ONE = (SUCC ZERO) |> :reduce",
+            r":let TWO = (SUCC ONE) |> :reduce",
+            r"(PLUS ONE TWO) |> :reduce |> :assert_eq \f.\x.(f (f (f x)))",
+        ]
+        repl = make_script_repl(lines)
+        # Should not raise — all assertions pass
+        repl.run()
+
+    def test_script_assert_failure(self) -> None:
+        import io
+        import contextlib
+
+        from play_with_lambda.service import make_script_repl
+
+        lines = [
+            r"(\x.x a) |> :assert_eq b",
+        ]
+        repl = make_script_repl(lines)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            repl.run()
+        assert "assertion failed" in output.getvalue()
 
 
 if __name__ == "__main__":

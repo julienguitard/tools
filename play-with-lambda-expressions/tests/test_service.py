@@ -203,5 +203,112 @@ class TestParseError(unittest.TestCase):
         assert ui.errors  # At least one error shown
 
 
+# -- Pipe tests ---------------------------------------------------------------
+
+
+class TestPipe(unittest.TestCase):
+    def test_simple_pipe(self) -> None:
+        svc, ui = _make_service([r"(\x.x a) |> :reduce"])
+        svc.run()
+        assert "a" in ui.outputs
+
+    def test_multi_pipe(self) -> None:
+        svc, ui = _make_service([r"((\x.\y.x a) b) |> :step |> :reduce"])
+        svc.run()
+        assert "a" in ui.outputs
+
+    def test_pipe_to_free(self) -> None:
+        svc, ui = _make_service([r"\x.(x y) |> :free"])
+        svc.run()
+        assert any("{y}" in o for o in ui.outputs)
+
+    def test_pipe_to_bound(self) -> None:
+        svc, ui = _make_service([r"\x.(x y) |> :bound"])
+        svc.run()
+        assert any("{x}" in o for o in ui.outputs)
+
+    def test_pipe_to_binding(self) -> None:
+        svc, ui = _make_service([r"\x.\y.x |> :binding"])
+        svc.run()
+        assert any("x" in o and "y" in o for o in ui.outputs)
+
+    def test_pipe_trace_passthrough(self) -> None:
+        """Trace displays steps AND passes final term through."""
+        svc, ui = _make_service([r"(\x.x a) |> :trace |> :free"])
+        svc.run()
+        # Trace steps displayed
+        assert any("0:" in o for o in ui.outputs)
+        # Then :free displayed on the final term
+        assert any("{a}" in o for o in ui.outputs)
+
+    def test_pipe_from_random(self) -> None:
+        fixed = Abs(Var("a"), Var("a"))
+        svc, ui = _make_service([":random 3 |> :reduce"], gen_term=fixed)
+        svc.run()
+        assert "λa.a" in ui.outputs
+
+    def test_pipe_error_bad_source(self) -> None:
+        svc, ui = _make_service([":list |> :reduce"])
+        svc.run()
+        assert any("cannot start pipe" in e for e in ui.errors)
+
+    def test_pipe_error_bad_segment(self) -> None:
+        svc, ui = _make_service([r"\x.x |> :quit"])
+        svc.run()
+        assert any("cannot pipe" in e for e in ui.errors)
+
+    def test_pipe_error_non_command_segment(self) -> None:
+        svc, ui = _make_service([r"\x.x |> foo"])
+        svc.run()
+        assert any("expected :command" in e for e in ui.errors)
+
+    def test_pipe_parse_error_short_circuits(self) -> None:
+        svc, ui = _make_service(["(x y |> :reduce"])
+        svc.run()
+        assert ui.errors
+
+
+class TestLetPipe(unittest.TestCase):
+    def test_let_with_pipe(self) -> None:
+        names = {
+            "SUCC": Abs(Var("n"), Abs(Var("f"), Abs(Var("x"),
+                App(Var("f"), App(App(Var("n"), Var("f")), Var("x")))))),
+            "ZERO": Abs(Var("f"), Abs(Var("x"), Var("x"))),
+        }
+        svc, ui = _make_service(
+            [":let ONE = (SUCC ZERO) |> :reduce", "ONE"], names=names,
+        )
+        svc.run()
+        # ONE should be bound and displayable
+        assert any("ONE" in o for o in ui.outputs)
+
+    def test_let_without_pipe(self) -> None:
+        svc, ui = _make_service([r":let ID = \x.x", "ID"])
+        svc.run()
+        assert any("λx.x" in o for o in ui.outputs)
+
+
+class TestAssertEq(unittest.TestCase):
+    def test_assert_pass(self) -> None:
+        svc, ui = _make_service([r"(\x.x a) |> :reduce |> :assert_eq a"])
+        svc.run()
+        assert "  ok" in ui.outputs
+
+    def test_assert_fail(self) -> None:
+        svc, ui = _make_service([r"(\x.x a) |> :assert_eq a"])
+        svc.run()
+        assert any("assertion failed" in e for e in ui.errors)
+
+    def test_assert_no_arg(self) -> None:
+        svc, ui = _make_service([r"\x.x |> :assert_eq"])
+        svc.run()
+        assert any("requires" in e for e in ui.errors)
+
+    def test_assert_bad_parse(self) -> None:
+        svc, ui = _make_service([r"\x.x |> :assert_eq (bad"])
+        svc.run()
+        assert ui.errors
+
+
 if __name__ == "__main__":
     unittest.main()
