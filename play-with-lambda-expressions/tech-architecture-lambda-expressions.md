@@ -41,7 +41,7 @@ class Var:
 @dataclass(frozen=True)
 class Abs:
     """λ-abstraction: binds exactly one variable."""
-    param: str
+    param: Var
     body: Term
 
 @dataclass(frozen=True)
@@ -55,41 +55,47 @@ Term = Var | Abs | App
 
 Python 3.10+ `match` statements provide exhaustive pattern matching on `Term`.
 
+**Domain type discipline**: `str` appears only at the parse/stringify boundary (converting between external string representation and domain). All internal operations work with `Var`, `Abs`, `App`.
+
 ### 2.2 Core operations
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `free_vars` | `(Term) -> set[str]` | Set of free variable names |
-| `bound_vars` | `(Term) -> set[str]` | Set of variables that appear bound |
-| `binding_vars` | `(Term) -> set[str]` | Set of variables that appear as λ-parameters |
-| `substitute` | `(Term, str, Term) -> Term` | Capture-avoiding substitution `M[x := N]` |
-| `alpha_rename` | `(Abs, str) -> Abs` | Rename the bound variable to avoid capture |
-| `beta_reduce_step` | `(Term) -> Term \| None` | One normal-order β-step; `None` if already in normal form |
-| `beta_reduce` | `(Term, max_steps: int) -> tuple[Term, list[Term], bool]` | Full reduction returning `(final, trace, reached_normal_form)` |
-| `is_normal_form` | `(Term) -> bool` | True if no β-redex exists |
-| `is_closed` | `(Term) -> bool` | True if `free_vars(t) == {}` |
+| Function | Input | Output | Description |
+|----------|-------|--------|-------------|
+| `free_vars` | `term: Term` | `set[Var]` | Set of free variables as `Var` objects |
+| `bound_vars` | `term: Term` | `set[Var]` | Set of variables that appear bound |
+| `binding_vars` | `term: Term` | `set[Var]` | Set of variables that appear as λ-parameters (collects `Abs.param`) |
+| `is_closed` | `term: Term` | `bool` | `not free_vars(term)` |
+| `is_normal_form` | `term: Term` | `bool` | `beta_reduce_step(term) is None` |
+| `_fresh_var` | `var: Var, avoid: set[Var]` | `Var` | Append `'` to `var.name` until `Var(name)` not in `avoid` |
+| `substitute` | `term: Term, var: Var, replacement: Term` | `Term` | Capture-avoiding `M[x := N]`; comparisons use `Var` equality |
+| `alpha_rename` | `abs_term: Abs, new_var: Var` | `Abs` | Returns `Abs(new_var, body[old_param := new_var])` |
+| `beta_reduce_step` | `term: Term` | `Term \| None` | One normal-order β-step; `None` if already in normal form |
+| `beta_reduce` | `term: Term, max_steps: int` | `tuple[Term, list[Term], bool]` | Full reduction returning `(final, trace, reached_normal_form)` |
 
 ### 2.3 Parser
 
 A recursive-descent parser for the strict syntax:
 
 ```
-<term>   ::= <var> | <abs> | <app> | '(' <term> ')'
+<term>   ::= <abs> | <app_or_group> | <var>
 <var>    ::= [a-zA-Z_][a-zA-Z0-9_]*
 <abs>    ::= ('λ' | '\') <var> '.' <term>
-<app>    ::= '(' <term> ' ' <term> ')'
+<app_or_group> ::= '(' <term> <term> ')' | '(' <term> ')'
 ```
 
-```python
-@dataclass(frozen=True)
-class ParseError:
-    """Syntax error with position for display."""
-    message: str
-    position: int
-
-def parse(source: str) -> Term | ParseError: ...
-def stringify(term: Term) -> str: ...
-```
+| Function / Class | Input | Output | Description |
+|------------------|-------|--------|-------------|
+| `ParseError` | `message: str, position: int` | — | Frozen dataclass for syntax errors |
+| `parse` | `source: str, names: dict[str, Term] \| None` | `Term \| ParseError` | Boundary: str → domain. Constructs `Abs(Var(...), ...)`. Optional `names` dict resolves named terms |
+| `stringify` | `term: Term` | `str` | Boundary: domain → str. Uses `λ` in output, reads `abs.param.name` |
+| `_Parser.__init__` | `source: str, names: dict[str, Term] \| None` | `None` | Internal parser state with position tracking |
+| `_Parser.parse_term` | — | `Term \| ParseError` | Top-level parse entry point |
+| `_Parser._parse_abs` | — | `Term \| ParseError` | Parse `λ<var>.<body>` or `\<var>.<body>` |
+| `_Parser._parse_paren` | — | `Term \| ParseError` | Parse `(<term>)` (grouping) or `(<term> <term>)` (application) |
+| `_Parser._parse_var` | — | `Var` | Parse identifier, check against names dict |
+| `_Parser._skip_whitespace` | — | `None` | Advance past whitespace |
+| `_Parser._peek` | — | `str \| None` | Look at current character without consuming |
+| `_Parser._advance` | — | `str` | Consume and return current character |
 
 Round-trip property: `parse(stringify(t))` reconstructs an equivalent term for all valid `t`.
 
@@ -121,6 +127,18 @@ class UserInterface(Protocol):
     def display_error(self, text: str) -> None: ...
 ```
 
+### Port method signatures
+
+| Port | Method | Input | Output |
+|------|--------|-------|--------|
+| `TermGenerator` | `generate` | `max_depth: int` | `Term` |
+| `NameRegistry` | `bind` | `name: str, term: Term` | `None` |
+| `NameRegistry` | `lookup` | `name: str` | `Term \| None` |
+| `NameRegistry` | `all_names` | — | `dict[str, Term]` |
+| `UserInterface` | `read_input` | — | `str \| None` |
+| `UserInterface` | `display` | `text: str` | `None` |
+| `UserInterface` | `display_error` | `text: str` | `None` |
+
 ### Port rationale
 
 | Port | Why it exists |
@@ -131,7 +149,7 @@ class UserInterface(Protocol):
 
 ## 4. Service layer — `service.py`
 
-The service orchestrates REPL commands by composing port calls. It contains no IO and no domain logic — it is the "narrator."
+The service orchestrates REPL commands by composing port calls and domain functions. It contains no IO and no domain logic — it is the "narrator." Each handler reads as `port_call → domain_fn → ... → port_call`.
 
 ```python
 from __future__ import annotations
@@ -144,46 +162,38 @@ from play_with_lambda.ports import TermGenerator, NameRegistry, UserInterface
 
 @dataclass
 class ReplConfig:
+    """Runtime configuration for the REPL."""
     max_steps: int = 100
     random_depth: int = 3
-
-class ReplService:
-    def __init__(
-        self,
-        ui: UserInterface,
-        generator: TermGenerator,
-        registry: NameRegistry,
-        config: ReplConfig,
-    ) -> None: ...
-
-    def run(self) -> None:
-        """Main REPL loop: read → dispatch → display → repeat."""
-        ...
 ```
 
-### Command dispatch
+### ReplService method signatures
 
-```python
-# -- command dispatch -----------------------------------------------------
+| Method | Input | Output | Composition |
+|--------|-------|--------|-------------|
+| `__init__` | `ui: UserInterface, generator: TermGenerator, registry: NameRegistry, config: ReplConfig` | `None` | Store injected ports |
+| `run` | — | `None` | `ui.display` → loop `ui.read_input` → `_dispatch` → repeat |
+| `_dispatch` | `raw: str` | `None` | Route: split on `:` prefix → delegate to handler |
+| `_parse_with_names` | `source: str` | `Term \| ParseError` | `registry.all_names()` → `parse(source, names)` |
+| `_handle_expression` | `raw: str` | `None` | `_parse_with_names` → `stringify` → `ui.display` |
+| `_handle_reduce` | `arg: str` | `None` | `_parse_with_names` → `beta_reduce(term, config.max_steps)` → `stringify(final)` → `ui.display` |
+| `_handle_step` | `arg: str` | `None` | `_parse_with_names` → `beta_reduce_step` → `stringify` or "NF" → `ui.display` |
+| `_handle_trace` | `arg: str` | `None` | `_parse_with_names` → `beta_reduce` → `stringify` each step → `ui.display` |
+| `_handle_free` | `arg: str` | `None` | `_parse_with_names` → `free_vars` → format `set[Var]` → `ui.display` |
+| `_handle_bound` | `arg: str` | `None` | `_parse_with_names` → `bound_vars` → format `set[Var]` → `ui.display` |
+| `_handle_binding` | `arg: str` | `None` | `_parse_with_names` → `binding_vars` → format `set[Var]` → `ui.display` |
+| `_handle_random` | `arg: str` | `None` | parse depth (int) → `generator.generate(depth)` → `stringify` → `ui.display` |
+| `_handle_let` | `arg: str` | `None` | split `=` → `_parse_with_names(expr)` → `registry.bind(name, term)` → `ui.display` confirm |
+| `_handle_list` | — | `None` | `registry.all_names()` → `stringify` each → `ui.display` |
+| `_handle_help` | — | `None` | `ui.display(HELP_TEXT)` |
 
-def _dispatch(self, raw: str) -> None:
-    """Route input to the appropriate handler."""
-    ...
+The service resolves named references (from `NameRegistry`) before parsing via `_parse_with_names`, allowing `:reduce S` where `S` was previously bound via `:let`.
 
-def _handle_expression(self, raw: str) -> None: ...
-def _handle_reduce(self, arg: str) -> None: ...
-def _handle_step(self, arg: str) -> None: ...
-def _handle_trace(self, arg: str) -> None: ...
-def _handle_free(self, arg: str) -> None: ...
-def _handle_bound(self, arg: str) -> None: ...
-def _handle_binding(self, arg: str) -> None: ...
-def _handle_random(self, arg: str) -> None: ...
-def _handle_let(self, arg: str) -> None: ...
-def _handle_list(self) -> None: ...
-def _handle_help(self) -> None: ...
-```
+### Factory function
 
-The service resolves named references (from `NameRegistry`) before parsing, allowing `:reduce S` where `S` was previously bound via `:let`.
+| Function | Input | Output | Description |
+|----------|-------|--------|-------------|
+| `make_repl` | `max_steps: int = 100, random_depth: int = 3` | `ReplService` | Composition root: imports adapters, wires dependencies |
 
 ## 5. Adapters layer
 
@@ -191,21 +201,39 @@ The service resolves named references (from `NameRegistry`) before parsing, allo
 
 Generates closed lambda terms using a stochastic recursive builder.
 
-- **Parameters**: `max_depth`, `var_prob`, `abs_prob`, `app_prob` (weights for node type selection).
-- **Closure guarantee**: maintains a list of bound variables in scope; only generates `Var` nodes from in-scope bindings.
+| Method | Input | Output | Description |
+|--------|-------|--------|-------------|
+| `generate` | `max_depth: int` | `Term` | Public entry point |
+| `_gen` | `depth: int, scope: list[Var]` | `Term` | Recursive builder; scope tracks `Var` objects |
+| `_fresh_param` | `scope: list[Var]` | `Var` | `@staticmethod`; returns `Var("a")`, ..., `Var("z")`, `Var("a'")`, etc. |
+
+- **Closure guarantee**: maintains a `list[Var]` of bound variables in scope; only generates `Var` nodes from in-scope bindings.
 - **Depth control**: as depth approaches `max_depth`, bias shifts toward `Var` to terminate recursion.
+- **Empty scope**: forces `Abs(fresh_var, ...)` to introduce a variable before any `Var` can be generated.
 
 ### 5.2 `ReadlineUI` — `adapters/readline_ui.py`
 
-- Uses Python `readline` for line editing, history, and tab completion.
+| Method | Input | Output | Description |
+|--------|-------|--------|-------------|
+| `__init__` | — | `None` | Lazy-imports `readline`, sets up tab completer |
+| `read_input` | — | `str \| None` | `input("λ> ")`, catches EOF/KeyboardInterrupt → `None` |
+| `display` | `text: str` | `None` | `print(text)` to stdout |
+| `display_error` | `text: str` | `None` | `print(f"Error: {text}")` to stdout |
+
 - Prompt: `λ> `.
-- Returns `None` on `EOF` (`Ctrl-D`).
-- Completes `:` commands and named terms on `Tab`.
+- Tab-completes `:` commands and named terms.
 
 ### 5.3 `InMemoryNameRegistry` — `adapters/memory_names.py`
 
+| Method | Input | Output | Description |
+|--------|-------|--------|-------------|
+| `__init__` | — | `None` | Parses 14 standard library entries into `dict[str, Term]` |
+| `bind` | `name: str, term: Term` | `None` | Adds or overwrites entry |
+| `lookup` | `name: str` | `Term \| None` | Returns `None` if not found |
+| `all_names` | — | `dict[str, Term]` | Shallow copy of the internal dict |
+
 - Simple `dict[str, Term]` wrapper.
-- Preloaded with standard combinators at construction:
+- Preloaded with standard combinators at construction (all using `Abs(Var(...), ...)`):
 
 ```python
 STANDARD_LIBRARY: dict[str, str] = {
@@ -228,16 +256,16 @@ STANDARD_LIBRARY: dict[str, str] = {
 
 ## 6. Composition root — `__main__.py`
 
+| Function | Input | Output | Description |
+|----------|-------|--------|-------------|
+| `main` | — | `None` | Parse CLI args, call `make_repl().run()` |
+
 ```python
-"""CLI entry point for the lambda calculus REPL."""
+"""CLI entry point — python -m play_with_lambda."""
 from __future__ import annotations
 import argparse
-from play_with_lambda.service import ReplService, ReplConfig
-from play_with_lambda.adapters import (
-    RandomTermGenerator,
-    ReadlineUI,
-    InMemoryNameRegistry,
-)
+from .service import make_repl
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -247,13 +275,9 @@ def main() -> None:
     parser.add_argument("--random-depth", type=int, default=3)
     args = parser.parse_args()
 
-    config = ReplConfig(max_steps=args.max_steps, random_depth=args.random_depth)
-    ui = ReadlineUI()
-    generator = RandomTermGenerator()
-    registry = InMemoryNameRegistry()
+    repl = make_repl(max_steps=args.max_steps, random_depth=args.random_depth)
+    repl.run()
 
-    service = ReplService(ui=ui, generator=generator, registry=registry, config=config)
-    service.run()
 
 if __name__ == "__main__":
     main()
@@ -263,46 +287,45 @@ if __name__ == "__main__":
 
 ### 7.1 Capture-avoiding substitution
 
-`M[x := N]` — the core operation behind β-reduction:
+`substitute(term: Term, var: Var, replacement: Term) -> Term` — the core operation behind β-reduction. All comparisons use `Var` equality (frozen dataclass `__eq__`):
 
 ```
-Var(y)[x := N]       = N          if y == x
+Var(y)[x := N]       = N          if y == x        (Var equality)
                       = Var(y)    otherwise
 
 App(M1, M2)[x := N]  = App(M1[x := N], M2[x := N])
 
-Abs(y, M)[x := N]    = Abs(y, M)               if y == x  (x is shadowed)
-                      = Abs(y, M[x := N])       if y ∉ free_vars(N)
-                      = Abs(z, M[y := Var(z)][x := N])
-                                                 otherwise (α-rename to fresh z)
+Abs(p, M)[x := N]    = Abs(p, M)               if p == x  (shadowed, Var eq)
+                      = Abs(p, M[x := N])       if p ∉ free_vars(N)  (set[Var] membership)
+                      = Abs(z, M[p := z][x := N])
+                                                 otherwise (α-rename p to fresh z)
 ```
 
-Fresh variable generation: append `'` (prime) to the variable name until it is not in `free_vars(M) ∪ free_vars(N)`.
+Fresh variable generation via `_fresh_var(var: Var, avoid: set[Var]) -> Var`: append `'` (prime) to `var.name` until `Var(name)` is not in `free_vars(M) ∪ free_vars(N)`.
 
 ### 7.2 Normal-order reduction
 
-Find the leftmost-outermost redex:
+`beta_reduce_step(term: Term) -> Term | None` — find the leftmost-outermost redex:
 
-1. If `App(Abs(x, M), N)` → β-reduce: `M[x := N]`.
-2. If `App(M, N)` and `M` is not an `Abs` → reduce `M` first.
-3. If `App(Abs(x, M), N)` is not directly reducible (shouldn't happen) → reduce inside `M`, then `N`.
-4. If `Abs(x, M)` → reduce inside `M`.
-5. `Var` → no reduction.
+1. If `App(Abs(p, M), N)` → β-reduce: `substitute(M, p, N)` (p is `Var`).
+2. If `App(M, N)` and `M` is not an `Abs` → reduce `M` first; if `M` in NF, reduce `N`.
+3. If `Abs(p, M)` → reduce inside `M`.
+4. `Var` → return `None` (no reduction possible).
 
 This guarantees finding the normal form if one exists (unlike applicative order).
 
 ### 7.3 Random closed-term generation
 
-Recursive procedure `gen(depth, scope)` where `scope` is the list of bound variables:
+`_gen(depth: int, scope: list[Var]) -> Term` — recursive procedure where `scope` tracks in-scope `Var` objects:
 
 ```
 if depth == 0 or (scope is non-empty and random < var_bias):
-    return Var(random_choice(scope))       # only from in-scope vars
+    return random_choice(scope)              # return existing Var from scope
 elif random < abs_threshold:
-    fresh = new_var_name()
-    return Abs(fresh, gen(depth - 1, scope + [fresh]))
+    fresh = _fresh_param(scope)              # returns Var
+    return Abs(fresh, _gen(depth - 1, scope + [fresh]))
 else:
-    return App(gen(depth - 1, scope), gen(depth - 1, scope))
+    return App(_gen(depth - 1, scope), _gen(depth - 1, scope))
 ```
 
 When `scope` is empty, the generator must produce an `Abs` to introduce a variable before any `Var` node can be generated. This guarantees closure.
@@ -340,25 +363,23 @@ When `scope` is empty, the generator must produce an `Abs` to introduce a variab
 ## 9. Makefile
 
 ```makefile
-VENV     := .venv
-PYTHON   := $(VENV)/bin/python
-PIP      := $(VENV)/bin/pip
+.PHONY: setup run clean
 
-.PHONY: setup run clean test
+# -- Setup ----------------------------------------------------------------
 
 setup:
-	python3 -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	test -f .env || cp .env.example .env
+	@echo "No dependencies — stdlib only."
+	@test -f ./.env || cp ./.env.example ./.env
+
+# -- Run ------------------------------------------------------------------
 
 run:
-	$(PYTHON) -m play_with_lambda
+	python3 -m play_with_lambda
 
-test:
-	$(PYTHON) -m pytest tests/ -v
+# -- Housekeeping ---------------------------------------------------------
 
 clean:
-	rm -rf $(VENV) __pycache__ play_with_lambda/__pycache__
+	find . -type d -name __pycache__ -exec rm -rf {} +
 ```
 
 ## 10. Dependency graph
