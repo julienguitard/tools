@@ -7,19 +7,28 @@ import unittest
 from play_with_lambda.domain import (
     Abs,
     App,
+    Meter,
     ParseError,
+    Ratio,
     Term,
     Var,
+    abs_depth,
     beta_reduce,
     beta_reduce_step,
+    binding_density,
     binding_vars,
     bound_vars,
+    de_bruijn_height,
     free_vars,
     is_closed,
     is_normal_form,
     parse,
     stringify,
+    subterm_count,
+    subterms,
     substitute,
+    term_depth,
+    term_size,
 )
 
 
@@ -348,6 +357,112 @@ class TestIsNormalForm(unittest.TestCase):
         assert not is_normal_form(
             App(Abs(Var("x"), Var("x")), Var("a")),
         )
+
+
+# -- Complexity metrics tests --------------------------------------------------
+
+
+class TestTermSize(unittest.TestCase):
+    def test_var(self) -> None:
+        assert term_size(Var("x")) == Meter(1)
+
+    def test_abs(self) -> None:
+        assert term_size(Abs(Var("x"), Var("x"))) == Meter(2)
+
+    def test_app(self) -> None:
+        assert term_size(App(Var("f"), Var("x"))) == Meter(3)
+
+    def test_s_combinator(self) -> None:
+        s = parse(r"\x.\y.\z.((x z) (y z))")
+        assert term_size(s) == Meter(10)
+
+
+class TestTermDepth(unittest.TestCase):
+    def test_var(self) -> None:
+        assert term_depth(Var("x")) == Meter(0)
+
+    def test_abs(self) -> None:
+        assert term_depth(Abs(Var("x"), Var("x"))) == Meter(1)
+
+    def test_nested(self) -> None:
+        # λx.λy.x → depth 2
+        assert term_depth(parse(r"\x.\y.x")) == Meter(2)
+
+
+class TestAbsDepth(unittest.TestCase):
+    def test_var(self) -> None:
+        assert abs_depth(Var("x")) == Meter(0)
+
+    def test_one_abs(self) -> None:
+        assert abs_depth(Abs(Var("x"), Var("x"))) == Meter(1)
+
+    def test_nested_abs(self) -> None:
+        assert abs_depth(parse(r"\x.\y.\z.x")) == Meter(3)
+
+    def test_app_no_abs(self) -> None:
+        assert abs_depth(App(Var("f"), Var("x"))) == Meter(0)
+
+    def test_app_with_abs(self) -> None:
+        # (λx.x λy.λz.z) → max(1, 2) = 2
+        t = App(Abs(Var("x"), Var("x")), Abs(Var("y"), Abs(Var("z"), Var("z"))))
+        assert abs_depth(t) == Meter(2)
+
+
+class TestSubterms(unittest.TestCase):
+    def test_var(self) -> None:
+        assert subterms(Var("x")) == {Var("x")}
+
+    def test_abs(self) -> None:
+        t = Abs(Var("x"), Var("x"))
+        st = subterms(t)
+        assert t in st
+        assert Var("x") in st
+        assert len(st) == 2
+
+    def test_shared_subterms(self) -> None:
+        # (x x) has 3 nodes but only 2 distinct subterms
+        t = App(Var("x"), Var("x"))
+        assert subterm_count(t) == Meter(2)
+
+
+class TestDeBruijnHeight(unittest.TestCase):
+    def test_identity(self) -> None:
+        # λx.x → de Bruijn index 0
+        assert de_bruijn_height(parse(r"\x.x")) == Meter(0)
+
+    def test_k(self) -> None:
+        # λx.λy.x → x has index 1 (reaches past y to x-binder)
+        assert de_bruijn_height(parse(r"\x.\y.x")) == Meter(1)
+
+    def test_s(self) -> None:
+        # λx.λy.λz.((x z)(y z)) → x has index 2
+        assert de_bruijn_height(parse(r"\x.\y.\z.((x z) (y z))")) == Meter(2)
+
+    def test_free_var(self) -> None:
+        # Free variables contribute 0 (no binder)
+        assert de_bruijn_height(Var("x")) == Meter(0)
+
+
+class TestBindingDensity(unittest.TestCase):
+    def test_closed_term(self) -> None:
+        # λx.x → 1 var occurrence, 1 bound → 1/1
+        assert binding_density(parse(r"\x.x")) == Ratio(1, 1)
+
+    def test_open_term(self) -> None:
+        # λx.y → 1 var occurrence, 0 bound → 0/1
+        assert binding_density(parse(r"\x.y")) == Ratio(0, 1)
+
+    def test_mixed(self) -> None:
+        # λx.(x y) → 2 var occurrences, 1 bound → 1/2
+        assert binding_density(parse(r"\x.(x y)")) == Ratio(1, 2)
+
+    def test_all_bound(self) -> None:
+        # λx.λy.(x y) → 2 var occurrences, 2 bound → 2/2
+        assert binding_density(parse(r"\x.\y.(x y)")) == Ratio(2, 2)
+
+    def test_free_var_only(self) -> None:
+        # x → 1 var occurrence, 0 bound → 0/1
+        assert binding_density(Var("x")) == Ratio(0, 1)
 
 
 if __name__ == "__main__":

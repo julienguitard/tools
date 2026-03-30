@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Generic, TypeVar
 
 
 # -- Term ADT ----------------------------------------------------------------
@@ -110,6 +111,159 @@ def is_closed(term: Term) -> bool:
 def is_normal_form(term: Term) -> bool:
     """Return True if no beta-redex exists in the term."""
     return beta_reduce_step(term) is None
+
+
+# -- Complexity metrics -------------------------------------------------------
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class Meter(Generic[T]):
+    """A tagged complexity measurement. T is a phantom type tag.
+
+    Attributes:
+        value: The measured integer quantity.
+    """
+
+    value: int
+
+
+@dataclass(frozen=True)
+class Ratio(Generic[T]):
+    """A tagged ratio measurement. T is a phantom type tag.
+
+    Attributes:
+        numerator: Count of matching occurrences.
+        denominator: Count of total occurrences.
+    """
+
+    numerator: int
+    denominator: int
+
+
+# Phantom type tags — never instantiated, used only as type parameters.
+class Size:
+    """Total AST node count."""
+
+class Depth:
+    """AST tree height."""
+
+class AbsDepth:
+    """Maximum lambda-binder nesting."""
+
+class SubtermCount:
+    """Number of distinct subterms."""
+
+class DeBruijnHeight:
+    """Maximum distance from a variable to its binder."""
+
+class BindingDensity:
+    """Ratio of bound to total variable occurrences."""
+
+
+def term_size(term: Term) -> Meter[Size]:
+    """Total number of AST nodes (Var + Abs + App)."""
+    return Meter(_term_size(term))
+
+
+def _term_size(term: Term) -> int:
+    match term:
+        case Var():
+            return 1
+        case Abs(body=b):
+            return 1 + _term_size(b)
+        case App(func=f, arg=a):
+            return 1 + _term_size(f) + _term_size(a)
+
+
+def term_depth(term: Term) -> Meter[Depth]:
+    """Height of the AST tree."""
+    return Meter(_term_depth(term))
+
+
+def _term_depth(term: Term) -> int:
+    match term:
+        case Var():
+            return 0
+        case Abs(body=b):
+            return 1 + _term_depth(b)
+        case App(func=f, arg=a):
+            return 1 + max(_term_depth(f), _term_depth(a))
+
+
+def abs_depth(term: Term) -> Meter[AbsDepth]:
+    """Maximum nesting depth of lambda binders."""
+    return Meter(_abs_depth(term))
+
+
+def _abs_depth(term: Term) -> int:
+    match term:
+        case Var():
+            return 0
+        case Abs(body=b):
+            return 1 + _abs_depth(b)
+        case App(func=f, arg=a):
+            return max(_abs_depth(f), _abs_depth(a))
+
+
+def subterms(term: Term) -> set[Term]:
+    """Set of all distinct subterms (including the term itself)."""
+    match term:
+        case Var():
+            return {term}
+        case Abs(body=b):
+            return {term} | subterms(b)
+        case App(func=f, arg=a):
+            return {term} | subterms(f) | subterms(a)
+
+
+def subterm_count(term: Term) -> Meter[SubtermCount]:
+    """Number of distinct subterms."""
+    return Meter(len(subterms(term)))
+
+
+def de_bruijn_height(term: Term) -> Meter[DeBruijnHeight]:
+    """Maximum distance from a variable occurrence to its binder."""
+    return Meter(_de_bruijn_height(term, {}, 0))
+
+
+def _de_bruijn_height(
+    term: Term, binder_depth: dict[str, int], depth: int,
+) -> int:
+    match term:
+        case Var(name=n):
+            if n in binder_depth:
+                return depth - binder_depth[n]
+            return 0
+        case Abs(param=p, body=b):
+            return _de_bruijn_height(
+                b, {**binder_depth, p.name: depth + 1}, depth + 1,
+            )
+        case App(func=f, arg=a):
+            return max(
+                _de_bruijn_height(f, binder_depth, depth),
+                _de_bruijn_height(a, binder_depth, depth),
+            )
+
+
+def binding_density(term: Term) -> Ratio[BindingDensity]:
+    """Ratio of bound variable occurrences to total variable occurrences."""
+    total, bound = _var_counts(term, set())
+    return Ratio(numerator=bound, denominator=total)
+
+
+def _var_counts(term: Term, scope: set[Var]) -> tuple[int, int]:
+    """Count (total_var_occurrences, bound_var_occurrences)."""
+    match term:
+        case Var() as v:
+            return (1, 1) if v in scope else (1, 0)
+        case Abs(param=p, body=b):
+            return _var_counts(b, scope | {p})
+        case App(func=f, arg=a):
+            ft, fb = _var_counts(f, scope)
+            at, ab = _var_counts(a, scope)
+            return (ft + at, fb + ab)
 
 
 # -- Substitution and reduction -----------------------------------------------
