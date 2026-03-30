@@ -8,12 +8,18 @@ from dataclasses import dataclass
 from .domain import (
     ParseError,
     Term,
+    abs_depth,
     beta_reduce_step,
+    binding_density,
     binding_vars,
     bound_vars,
+    de_bruijn_height,
     free_vars,
     parse,
     stringify,
+    subterm_count,
+    term_depth,
+    term_size,
 )
 from .ports import NameRegistry, TermGenerator, UserInterface
 
@@ -113,6 +119,18 @@ class ReplService:
                 self._handle_binding(arg)
             case ":random":
                 self._handle_random(arg)
+            case ":size":
+                self._handle_metric(arg, "size")
+            case ":depth":
+                self._handle_metric(arg, "depth")
+            case ":abs_depth":
+                self._handle_metric(arg, "abs_depth")
+            case ":subterms":
+                self._handle_metric(arg, "subterms")
+            case ":debruijn":
+                self._handle_metric(arg, "debruijn")
+            case ":density":
+                self._handle_metric(arg, "density")
             case ":list":
                 self._handle_list()
             case _:
@@ -222,6 +240,17 @@ class ReplService:
             "{" + ", ".join(sorted(v.name for v in biv)) + "}"
         )
 
+    def _handle_metric(self, arg: str, metric: str) -> None:
+        """Compute and display a complexity metric for a term."""
+        if not arg:
+            self._ui.display_error(f":{metric} requires an expression")
+            return
+        result = self._parse_with_names(arg)
+        if isinstance(result, ParseError):
+            self._show_parse_error(arg, result)
+            return
+        self._ui.display(self._format_metric(result, metric))
+
     def _handle_random(self, arg: str) -> None:
         """Generate and display a random closed term."""
         depth = self._config.random_depth
@@ -271,6 +300,12 @@ class ReplService:
               :free <expr>        List free variables
               :bound <expr>       List bound variables
               :binding <expr>     List binding variables (lambda params)
+              :size <expr>        Total AST node count
+              :depth <expr>       AST tree height
+              :abs_depth <expr>   Maximum lambda-binder nesting
+              :subterms <expr>    Number of distinct subterms
+              :debruijn <expr>    Maximum de Bruijn index
+              :density <expr>     Bound/total variable occurrence ratio
               :random [depth]     Generate a random closed term
               :let name = <expr>  Bind a name to an expression
               :assert_eq <expr>   Assert piped term equals <expr> (pipe only)
@@ -384,6 +419,11 @@ class ReplService:
                     "{" + ", ".join(sorted(v.name for v in biv)) + "}"
                 )
                 return None
+            case (":size" | ":depth" | ":abs_depth"
+                  | ":subterms" | ":debruijn" | ":density"):
+                metric = cmd.removeprefix(":")
+                self._ui.display(self._format_metric(term, metric))
+                return None
             case ":assert_eq":
                 if not arg:
                     self._ui.display_error(
@@ -452,6 +492,24 @@ class ReplService:
         return current, trace, False
 
     # -- presentation helpers -------------------------------------------------
+
+    @staticmethod
+    def _format_metric(term: Term, metric: str) -> str:
+        """Format a complexity metric for display."""
+        match metric:
+            case "size":
+                return str(term_size(term).value)
+            case "depth":
+                return str(term_depth(term).value)
+            case "abs_depth":
+                return str(abs_depth(term).value)
+            case "subterms":
+                return str(subterm_count(term).value)
+            case "debruijn":
+                return str(de_bruijn_height(term).value)
+            case "density":
+                r = binding_density(term)
+                return f"{r.numerator}/{r.denominator}"
 
     def _show_parse_error(self, source: str, error: ParseError) -> None:
         """Display a parse error with position marker."""
