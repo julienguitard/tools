@@ -46,11 +46,10 @@ class RandomTermGenerator:
             return random.choice(scope)
 
         # Weighted choice: bias toward Var as depth decreases.
-        var_weight = 3
+        var_weight = 1
         abs_weight = 2
-        app_weight = 2
-        roll = random.random() * (var_weight + abs_weight + app_weight)
-
+        app_weight = 3
+        roll = random.uniform(0, 1) * (var_weight + abs_weight + app_weight)
         if roll < var_weight:
             return random.choice(scope)
         elif roll < var_weight + abs_weight:
