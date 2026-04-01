@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 
 # -- Term ADT ----------------------------------------------------------------
@@ -48,6 +48,43 @@ class App:
 
 Term = Var | Abs | App
 
+R = TypeVar("R")
+
+
+def fold(
+    term: Term,
+    on_var: Callable[[Var], R],
+    on_abs: Callable[[Var, R], R],
+    on_app: Callable[[R, R], R],
+) -> R:
+    """Catamorphism over the Term ADT.
+
+    Recursively collapses a term by replacing each constructor with
+    a function:
+      - Var(v)      → on_var(v)
+      - Abs(p, body) → on_abs(p, fold(body))
+      - App(f, a)   → on_app(fold(f), fold(a))
+
+    Args:
+        term: The term to fold over.
+        on_var: Handles variable leaves.
+        on_abs: Combines a binder with its folded body.
+        on_app: Combines folded function and argument.
+
+    Returns:
+        The result of collapsing the entire term.
+    """
+    match term:
+        case Var() as v:
+            return on_var(v)
+        case Abs(param=p, body=b):
+            return on_abs(p, fold(b, on_var, on_abs, on_app))
+        case App(func=f, arg=a):
+            return on_app(
+                fold(f, on_var, on_abs, on_app),
+                fold(a, on_var, on_abs, on_app),
+            )
+
 
 @dataclass(frozen=True)
 class ParseError:
@@ -62,18 +99,30 @@ class ParseError:
     position: int
 
 
+@dataclass(frozen=True)
+class ParseResult:
+    """Successful parse with optional shadowing metadata.
+
+    Attributes:
+        term: The parsed term (with shadowed variables renamed).
+        renames: Pairs of (original_name, fresh_name) for each rename.
+    """
+
+    term: Term
+    renames: tuple[tuple[str, str], ...]
+
+
 # -- Variable analysis --------------------------------------------------------
 
 
 def free_vars(term: Term) -> set[Var]:
     """Return the set of free variables in a term."""
-    match term:
-        case Var() as v:
-            return {v}
-        case Abs(param=p, body=b):
-            return free_vars(b) - {p}
-        case App(func=f, arg=a):
-            return free_vars(f) | free_vars(a)
+    return fold(
+        term,
+        on_var=lambda v: {v},
+        on_abs=lambda p, body: body - {p},
+        on_app=lambda f, a: f | a,
+    )
 
 
 def bound_vars(term: Term) -> set[Var]:
@@ -94,13 +143,12 @@ def _bound_vars(term: Term, scope: set[Var]) -> set[Var]:
 
 def binding_vars(term: Term) -> set[Var]:
     """Return the set of binding variables (lambda parameters) in a term."""
-    match term:
-        case Var():
-            return set()
-        case Abs(param=p, body=b):
-            return {p} | binding_vars(b)
-        case App(func=f, arg=a):
-            return binding_vars(f) | binding_vars(a)
+    return fold(
+        term,
+        on_var=lambda _: set(),
+        on_abs=lambda p, body: {p} | body,
+        on_app=lambda f, a: f | a,
+    )
 
 
 def is_closed(term: Term) -> bool:
@@ -164,51 +212,40 @@ class BindingDensity:
 
 def term_size(term: Term) -> Meter[Size]:
     """Total number of AST nodes (Var + Abs + App)."""
-    return Meter(_term_size(term))
-
-
-def _term_size(term: Term) -> int:
-    match term:
-        case Var():
-            return 1
-        case Abs(body=b):
-            return 1 + _term_size(b)
-        case App(func=f, arg=a):
-            return 1 + _term_size(f) + _term_size(a)
+    return Meter(fold(
+        term,
+        on_var=lambda _: 1,
+        on_abs=lambda _p, body: 1 + body,
+        on_app=lambda f, a: 1 + f + a,
+    ))
 
 
 def term_depth(term: Term) -> Meter[Depth]:
     """Height of the AST tree."""
-    return Meter(_term_depth(term))
-
-
-def _term_depth(term: Term) -> int:
-    match term:
-        case Var():
-            return 0
-        case Abs(body=b):
-            return 1 + _term_depth(b)
-        case App(func=f, arg=a):
-            return 1 + max(_term_depth(f), _term_depth(a))
+    return Meter(fold(
+        term,
+        on_var=lambda _: 0,
+        on_abs=lambda _p, body: 1 + body,
+        on_app=lambda f, a: 1 + max(f, a),
+    ))
 
 
 def abs_depth(term: Term) -> Meter[AbsDepth]:
     """Maximum nesting depth of lambda binders."""
-    return Meter(_abs_depth(term))
-
-
-def _abs_depth(term: Term) -> int:
-    match term:
-        case Var():
-            return 0
-        case Abs(body=b):
-            return 1 + _abs_depth(b)
-        case App(func=f, arg=a):
-            return max(_abs_depth(f), _abs_depth(a))
+    return Meter(fold(
+        term,
+        on_var=lambda _: 0,
+        on_abs=lambda _p, body: 1 + body,
+        on_app=lambda f, a: max(f, a),
+    ))
 
 
 def subterms(term: Term) -> set[Term]:
-    """Set of all distinct subterms (including the term itself)."""
+    """Set of all distinct subterms (including the term itself).
+
+    Note: cannot be expressed as a pure fold because each node must
+    include *itself* (the original Term, not just the folded result).
+    """
     match term:
         case Var():
             return {term}
@@ -357,7 +394,11 @@ def beta_reduce(
 
 
 class _Parser:
-    """Recursive-descent parser for strict lambda calculus syntax."""
+    """Recursive-descent parser for strict lambda calculus syntax.
+
+    Maintains a scope stack to detect and rename shadowed binding
+    variables, producing unambiguous terms.
+    """
 
     def __init__(
         self, source: str, names: dict[str, Term] | None = None,
@@ -365,6 +406,8 @@ class _Parser:
         self._src = source
         self._pos = 0
         self._names = names or {}
+        self._scope: dict[str, Var] = {}
+        self.renames: list[tuple[str, str]] = []
 
     def parse_term(self) -> Term | ParseError:
         """Parse a single term from the current position."""
@@ -390,15 +433,32 @@ class _Parser:
             return ParseError("expected parameter name after λ", self._pos)
         param_name = self._parse_identifier()
 
+        # Detect shadowing and rename if needed.
+        if param_name in self._scope:
+            fresh = _fresh_var(Var(param_name), set(self._scope.values()))
+            if fresh.name != param_name:
+                self.renames.append((param_name, fresh.name))
+            param_var = fresh
+        else:
+            param_var = Var(param_name)
+
         self._skip_whitespace()
         if self._peek() != ".":
             return ParseError("expected '.' after parameter", self._pos)
         self._advance()  # consume .
 
+        # Push scope, parse body, pop scope.
+        old_binding = self._scope.get(param_name)
+        self._scope[param_name] = param_var
         body = self.parse_term()
+        if old_binding is None:
+            del self._scope[param_name]
+        else:
+            self._scope[param_name] = old_binding
+
         if isinstance(body, ParseError):
             return body
-        return Abs(Var(param_name), body)
+        return Abs(param_var, body)
 
     def _parse_paren(self) -> Term | ParseError:
         """Parse (term) for grouping or (term term) for application."""
@@ -425,8 +485,10 @@ class _Parser:
         return App(first, second)
 
     def _parse_var_or_name(self) -> Term:
-        """Parse an identifier — resolve against names dict or return Var."""
+        """Parse an identifier — resolve via scope, names dict, or raw Var."""
         name = self._parse_identifier()
+        if name in self._scope:
+            return self._scope[name]
         if name in self._names:
             return self._names[name]
         return Var(name)
@@ -458,8 +520,31 @@ class _Parser:
         return ch
 
 
+def _run_parser(
+    source: str, names: dict[str, Term] | None = None,
+) -> tuple[Term, list[tuple[str, str]]] | ParseError:
+    """Run the parser, returning the term and any renames, or a ParseError."""
+    source = source.strip()
+    if not source:
+        return ParseError("empty input", 0)
+    parser = _Parser(source, names)
+    result = parser.parse_term()
+    if isinstance(result, ParseError):
+        return result
+    parser._skip_whitespace()
+    if parser._pos < len(source):
+        return ParseError(
+            f"unexpected trailing content: '{source[parser._pos:]}'",
+            parser._pos,
+        )
+    return result, parser.renames
+
+
 def parse(source: str, names: dict[str, Term] | None = None) -> Term | ParseError:
     """Parse a lambda calculus expression from a string.
+
+    Shadowed binding variables are silently renamed. Use parse_with_info
+    to get rename details.
 
     Args:
         source: The source string to parse.
@@ -468,21 +553,30 @@ def parse(source: str, names: dict[str, Term] | None = None) -> Term | ParseErro
     Returns:
         A Term on success, or a ParseError on failure.
     """
-    source = source.strip()
-    if not source:
-        return ParseError("empty input", 0)
-    parser = _Parser(source, names)
-    result = parser.parse_term()
+    result = _run_parser(source, names)
     if isinstance(result, ParseError):
         return result
-    # Ensure all input was consumed.
-    parser._skip_whitespace()
-    if parser._pos < len(source):
-        return ParseError(
-            f"unexpected trailing content: '{source[parser._pos:]}'",
-            parser._pos,
-        )
-    return result
+    return result[0]
+
+
+def parse_with_info(
+    source: str, names: dict[str, Term] | None = None,
+) -> ParseResult | ParseError:
+    """Parse a lambda expression, returning rename metadata.
+
+    Args:
+        source: The source string to parse.
+        names: Optional mapping of identifiers to pre-defined terms.
+
+    Returns:
+        A ParseResult with the term and any shadowing renames,
+        or a ParseError on failure.
+    """
+    result = _run_parser(source, names)
+    if isinstance(result, ParseError):
+        return result
+    term, renames = result
+    return ParseResult(term=term, renames=tuple(renames))
 
 
 # -- Pretty-printer -----------------------------------------------------------
@@ -494,10 +588,9 @@ def stringify(term: Term) -> str:
     Uses the strict syntax: explicit parentheses for application,
     single-variable λ-abstraction.
     """
-    match term:
-        case Var(name=n):
-            return n
-        case Abs(param=p, body=b):
-            return f"λ{p.name}.{stringify(b)}"
-        case App(func=f, arg=a):
-            return f"({stringify(f)} {stringify(a)})"
+    return fold(
+        term,
+        on_var=lambda v: v.name,
+        on_abs=lambda p, body: f"λ{p.name}.{body}",
+        on_app=lambda f, a: f"({f} {a})",
+    )

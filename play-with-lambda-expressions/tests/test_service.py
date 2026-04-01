@@ -310,5 +310,28 @@ class TestAssertEq(unittest.TestCase):
         assert ui.errors
 
 
+class TestShadowingWarning(unittest.TestCase):
+    def test_warning_displayed(self) -> None:
+        svc, ui = _make_service([r"\c.\c.c"])
+        svc.run()
+        assert any("shadowed c" in o for o in ui.outputs)
+        assert any("c'" in o for o in ui.outputs)
+
+    def test_no_warning_without_shadow(self) -> None:
+        svc, ui = _make_service([r"\x.\y.x"])
+        svc.run()
+        assert not any("shadowed" in o for o in ui.outputs)
+
+    def test_warning_in_pipe(self) -> None:
+        svc, ui = _make_service([r"\x.\x.x |> :free"])
+        svc.run()
+        assert any("shadowed x" in o for o in ui.outputs)
+
+    def test_renamed_term_displayed(self) -> None:
+        svc, ui = _make_service([r"\c.\c.c"])
+        svc.run()
+        assert any("λc.λc'.c'" in o for o in ui.outputs)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ from .domain import (
     bound_vars,
     de_bruijn_height,
     free_vars,
-    parse,
+    parse_with_info,
     stringify,
     subterm_count,
     term_depth,
@@ -137,8 +137,13 @@ class ReplService:
                 self._ui.display_error(f"unknown command: {parts[0]}")
 
     def _parse_with_names(self, source: str) -> Term | ParseError:
-        """Parse source with named-term resolution from registry."""
-        return parse(source, self._registry.all_names())
+        """Parse source with named-term resolution and shadowing warnings."""
+        result = parse_with_info(source, self._registry.all_names())
+        if isinstance(result, ParseError):
+            return result
+        for original, renamed in result.renames:
+            self._ui.display(f"  (shadowed {original} → {renamed})")
+        return result.term
 
     # -- handlers (each is a port/domain composition) -------------------------
 

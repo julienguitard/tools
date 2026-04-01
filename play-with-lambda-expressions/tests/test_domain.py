@@ -23,6 +23,7 @@ from play_with_lambda.domain import (
     is_closed,
     is_normal_form,
     parse,
+    parse_with_info,
     stringify,
     subterm_count,
     subterms,
@@ -105,6 +106,56 @@ class TestParse(unittest.TestCase):
     def test_whitespace_handling(self) -> None:
         assert parse("  x  ") == Var("x")
         assert parse(r"  \x . x  ") == Abs(Var("x"), Var("x"))
+
+
+class TestShadowing(unittest.TestCase):
+    """Shadowed binding variables are renamed during parsing."""
+
+    def test_simple_shadow(self) -> None:
+        r = parse_with_info(r"\c.\c.c")
+        assert r.term == Abs(Var("c"), Abs(Var("c'"), Var("c'")))
+        assert r.renames == (("c", "c'"),)
+
+    def test_deep_shadow(self) -> None:
+        r = parse_with_info(r"\x.\y.\x.x")
+        assert r.term == Abs(Var("x"), Abs(Var("y"), Abs(Var("x'"), Var("x'"))))
+        assert r.renames == (("x", "x'"),)
+
+    def test_no_shadow(self) -> None:
+        r = parse_with_info(r"\x.\y.x")
+        assert r.renames == ()
+
+    def test_triple_shadow(self) -> None:
+        r = parse_with_info(r"\x.\x.\x.x")
+        # Middle x→x', third x takes back original name (x' is in scope, not x)
+        assert stringify(r.term) == "λx.λx'.λx.x"
+        assert r.renames == (("x", "x'"),)
+
+    def test_body_resolves_to_inner(self) -> None:
+        # In \x.\x.(x y), body x should refer to inner binder (renamed)
+        r = parse_with_info(r"\x.\x.(x y)")
+        inner_param = r.term.body.param  # the renamed inner param
+        body_func = r.term.body.body.func  # the x in (x y)
+        assert body_func == inner_param
+
+    def test_round_trip_stable(self) -> None:
+        r = parse_with_info(r"\c.\c.c")
+        s = stringify(r.term)
+        r2 = parse_with_info(s)
+        assert r.term == r2.term
+        assert r2.renames == ()  # no renames on second parse
+
+    def test_parse_drops_renames(self) -> None:
+        # parse() returns Term directly, shadows silently renamed
+        t = parse(r"\c.\c.c")
+        assert t == Abs(Var("c"), Abs(Var("c'"), Var("c'")))
+
+    def test_substitution_on_renamed(self) -> None:
+        # Substitution should still work correctly after renaming
+        t = parse(r"\x.\x.x")
+        # t = λx.λx'.x' — substitute x := a should change nothing (shadowed)
+        result = substitute(t, Var("x"), Var("a"))
+        assert result == t
 
 
 class TestRoundTrip(unittest.TestCase):
