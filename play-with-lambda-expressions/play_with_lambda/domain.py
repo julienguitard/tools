@@ -127,18 +127,12 @@ def free_vars(term: Term) -> set[Var]:
 
 def bound_vars(term: Term) -> set[Var]:
     """Return the set of variables that appear bound in a term."""
-    return _bound_vars(term, set())
-
-
-def _bound_vars(term: Term, scope: set[Var]) -> set[Var]:
-    """Recursive helper tracking in-scope binders."""
-    match term:
-        case Var() as v:
-            return {v} if v in scope else set()
-        case Abs(param=p, body=b):
-            return _bound_vars(b, scope | {p})
-        case App(func=f, arg=a):
-            return _bound_vars(f, scope) | _bound_vars(a, scope)
+    return fold(
+        term,
+        on_var=lambda v: lambda scope: {v} if v in scope else set(),
+        on_abs=lambda p, body: lambda scope: body(scope | {p}),
+        on_app=lambda f, a: lambda scope: f(scope) | a(scope),
+    )(set())
 
 
 def binding_vars(term: Term) -> set[Var]:
@@ -262,45 +256,25 @@ def subterm_count(term: Term) -> Meter[SubtermCount]:
 
 def de_bruijn_height(term: Term) -> Meter[DeBruijnHeight]:
     """Maximum distance from a variable occurrence to its binder."""
-    return Meter(_de_bruijn_height(term, {}, 0))
-
-
-def _de_bruijn_height(
-    term: Term, binder_depth: dict[str, int], depth: int,
-) -> int:
-    match term:
-        case Var(name=n):
-            if n in binder_depth:
-                return depth - binder_depth[n]
-            return 0
-        case Abs(param=p, body=b):
-            return _de_bruijn_height(
-                b, {**binder_depth, p.name: depth + 1}, depth + 1,
-            )
-        case App(func=f, arg=a):
-            return max(
-                _de_bruijn_height(f, binder_depth, depth),
-                _de_bruijn_height(a, binder_depth, depth),
-            )
+    return Meter(fold(
+        term,
+        on_var=lambda v: lambda bd, d: (d - bd[v.name]) if v.name in bd else 0,
+        on_abs=lambda p, body: lambda bd, d: body({**bd, p.name: d + 1}, d + 1),
+        on_app=lambda f, a: lambda bd, d: max(f(bd, d), a(bd, d)),
+    )({}, 0))
 
 
 def binding_density(term: Term) -> Ratio[BindingDensity]:
     """Ratio of bound variable occurrences to total variable occurrences."""
-    total, bound = _var_counts(term, set())
+    total, bound = fold(
+        term,
+        on_var=lambda v: lambda scope: (1, 1) if v in scope else (1, 0),
+        on_abs=lambda p, body: lambda scope: body(scope | {p}),
+        on_app=lambda f, a: lambda scope: tuple(
+            x + y for x, y in zip(f(scope), a(scope))
+        ),
+    )(set())
     return Ratio(numerator=bound, denominator=total)
-
-
-def _var_counts(term: Term, scope: set[Var]) -> tuple[int, int]:
-    """Count (total_var_occurrences, bound_var_occurrences)."""
-    match term:
-        case Var() as v:
-            return (1, 1) if v in scope else (1, 0)
-        case Abs(param=p, body=b):
-            return _var_counts(b, scope | {p})
-        case App(func=f, arg=a):
-            ft, fb = _var_counts(f, scope)
-            at, ab = _var_counts(a, scope)
-            return (ft + at, fb + ab)
 
 
 # -- Substitution and reduction -----------------------------------------------
