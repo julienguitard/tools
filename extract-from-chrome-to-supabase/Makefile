@@ -12,7 +12,7 @@ $(VENV)/bin/activate: requirements.txt
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
-	@test -f ./.env || cp ./.env.example ./.env
+	@test -f ../.env || cp ./.env.example ./.env
 	@echo ""
 	@echo "Done. Edit .env with your keys, then:"
 	@echo "  make run"
@@ -21,11 +21,11 @@ $(VENV)/bin/activate: requirements.txt
 # -- Run ------------------------------------------------------------------
 
 run: setup
-	@set -a && . ./.env && set +a && \
+	@set -a && . ../.env && set +a && \
 	$(PYTHON) -m extract_from_chrome_to_supabase
 
 dry-run: setup
-	@set -a && . ./.env && set +a && \
+	@set -a && . ../.env && set +a && \
 	$(PYTHON) -m extract_from_chrome_to_supabase --dry-run
 
 # -- Housekeeping ---------------------------------------------------------

@@ -9,8 +9,11 @@ import dotenv
 
 from .service import make_curator
 
-_ROOT_ENV = Path(__file__).resolve().parent.parent / ".env"
-dotenv.load_dotenv(_ROOT_ENV)
+_TOOL_ENV = Path(__file__).resolve().parent.parent / ".env"
+_MONOREPO_ENV = Path(__file__).resolve().parent.parent.parent / ".env"
+# Tool-local .env wins; fall back to the shared monorepo-root .env.
+dotenv.load_dotenv(_TOOL_ENV)
+dotenv.load_dotenv(_MONOREPO_ENV)
 
 
 def main() -> None:

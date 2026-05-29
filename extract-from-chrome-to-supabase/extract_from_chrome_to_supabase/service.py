@@ -105,7 +105,12 @@ def make_curator(output_dir: Path, *, dry_run: bool = False) -> CurateTabsUseCas
         if not base_url or not api_key:
             print("SUPABASE_URL and SUPABASE_API_KEY must be set in .env when MOCK=false")
             sys.exit(1)
-        repository = SupabaseLinkRepository(base_url, api_key)
+        repository = SupabaseLinkRepository(
+            base_url,
+            api_key,
+            email=os.getenv("SUPABASE_EMAIL", ""),
+            password=os.getenv("SUPABASE_PASSWORD", ""),
+        )
 
     # Build categorizer: keyword heuristic → AI fallback
     keyword = KeywordCategorizer()
