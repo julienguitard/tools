@@ -16,7 +16,7 @@ class PyMuPdfReader:
         self._max_chars = max_chars
 
     def extract_text(self, path: Path) -> DocumentText:
-        import fitz  # lazy import keeps domain pure at module level
+        import fitz  # type: ignore[import-not-found]  # PyMuPDF ships no stubs; lazy import keeps domain pure
 
         try:
             doc = fitz.open(path)

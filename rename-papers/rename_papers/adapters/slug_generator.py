@@ -42,5 +42,5 @@ class OpenAiSlugGenerator:
                 {"role": "user", "content": text},
             ],
         )
-        raw = resp.choices[0].message.content.strip()
+        raw = (resp.choices[0].message.content or "").strip()
         return Article.sanitize_slug(raw)
