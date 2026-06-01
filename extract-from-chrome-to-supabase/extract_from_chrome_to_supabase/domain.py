@@ -35,20 +35,21 @@ CATEGORIES = [
 
 CATEGORIES_SET = set(CATEGORIES)
 
+type Url = str
 
 @dataclass(frozen=True)
 class Tab:
     """A single Chrome browser tab."""
 
     title: str
-    url: str
+    url: Url 
 
 
 @dataclass(frozen=True)
 class Link:
     """A categorized URL ready for persistence."""
 
-    url: str
+    url: Url
     category: str
 
     def to_dict(self) -> dict[str, str]:
