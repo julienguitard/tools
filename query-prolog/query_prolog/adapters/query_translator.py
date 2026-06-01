@@ -60,15 +60,15 @@ class AiQueryTranslator:
             return f"_error({e})"
 
     def _call_llm(self, prompt: str) -> str:
-        import httpx
-
         if self._provider == "openai":
-            return self._call_openai(httpx, prompt)
+            return self._call_openai(prompt)
         elif self._provider == "anthropic":
-            return self._call_anthropic(httpx, prompt)
+            return self._call_anthropic(prompt)
         raise ValueError(f"Unknown AI provider: {self._provider}")
 
-    def _call_openai(self, httpx: object, prompt: str) -> str:
+    def _call_openai(self, prompt: str) -> str:
+        import httpx
+
         resp = httpx.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {self._api_key}"},
@@ -83,7 +83,9 @@ class AiQueryTranslator:
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
-    def _call_anthropic(self, httpx: object, prompt: str) -> str:
+    def _call_anthropic(self, prompt: str) -> str:
+        import httpx
+
         resp = httpx.post(
             "https://api.anthropic.com/v1/messages",
             headers={
