@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from ..data_types import DependencyGraph, SubgraphConfig, TableNode
+from ..data_types import (
+    DependencyEdge,
+    DependencyGraph,
+    Direction,
+    Markdown,
+    SubgraphConfig,
+    TableName,
+    TableNode,
+)
 
 # ─── Subgraph layout configuration ──────────────────────────────────────────
 # Nesting structure mirrors the medallion architecture.
@@ -84,7 +92,7 @@ NESTING_ORDER: list[tuple[str, str, list[str]]] = [
 class MermaidRenderer:
     """Renders a DependencyGraph as a Mermaid.js Markdown document."""
 
-    def render(self, graph: DependencyGraph) -> str:
+    def render(self, graph: DependencyGraph) -> Markdown:
         """Produce the complete Markdown document.
 
         Args:
@@ -179,7 +187,7 @@ def render_all_subgraphs(
     return lines
 
 
-def render_subgraph_open(sg_id: str, title: str, direction: str) -> list[str]:
+def render_subgraph_open(sg_id: str, title: str, direction: Direction) -> list[str]:
     """Emit the opening lines of a Mermaid subgraph.
 
     Args:
@@ -235,7 +243,7 @@ def render_db_node(node: TableNode) -> str:
     return f'        {node_id}[("{node.short_name}")]'
 
 
-def sanitize_id(full_name: str) -> str:
+def sanitize_id(full_name: TableName) -> str:
     """Convert a fully qualified table name to a valid Mermaid node id.
 
     Replaces dots and hyphens with underscores.
@@ -309,7 +317,7 @@ def render_dashed_edge(source_id: str, target_id: str, label: str) -> str:
 
 def _group_edges_by_section(
     graph: DependencyGraph,
-) -> list[tuple[str, list]]:
+) -> list[tuple[str, list[DependencyEdge]]]:
     """Group edges by source-layer to target-layer section.
 
     Args:
@@ -318,7 +326,7 @@ def _group_edges_by_section(
     Returns:
         Ordered list of (section_label, edges) tuples.
     """
-    section_map: dict[str, list] = {}
+    section_map: dict[str, list[DependencyEdge]] = {}
     for edge in graph.edges:
         src_node = graph.nodes.get(edge.source)
         tgt_node = graph.nodes.get(edge.target)
@@ -329,7 +337,7 @@ def _group_edges_by_section(
 
     layer_order = {"raw": 0, "bronze": 1, "silver": 2, "gold": 3, "platinum": 4}
 
-    def sort_key(item: tuple[str, list]) -> tuple[int, int]:
+    def sort_key(item: tuple[str, list[DependencyEdge]]) -> tuple[int, int]:
         parts = item[0].split(" -> ")
         return (
             layer_order.get(parts[0], 99),

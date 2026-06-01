@@ -8,8 +8,15 @@ from pathlib import Path
 from ..data_types import (
     DependencyEdge,
     DependencyGraph,
+    Dataset,
+    Layer,
     ParsedStatement,
+    SqlText,
+    StatementType,
+    Subgroup,
+    TableName,
     TableNode,
+    WriteStatementType,
 )
 
 # ─── Constants ───────────────────────────────────────────────────────────────
@@ -24,13 +31,17 @@ Groups: (1) full_name, (2) dataset, (3) table_name.
 EXCLUDED_DIRS = {"shared", "mockup", "_moved_or_deprecated"}
 """Subdirectories to skip during SQL file discovery."""
 
-LAYER_DIRS = ("bronze", "silver", "gold", "platinum", "raw", "operations")
+LAYER_DIRS: tuple[Layer, ...] = ("bronze", "silver", "gold", "platinum", "raw", "operations")
 """Known layer directory names in the tables/ tree."""
 
-LAYER_PREFIXES = (
-    "bronze_", "silver_", "gold_", "platinum_", "raw_",
-)
-"""Table name prefixes used to infer layer when no source file exists."""
+LAYER_PREFIXES: dict[str, Layer] = {
+    "bronze_": "bronze",
+    "silver_": "silver",
+    "gold_": "gold",
+    "platinum_": "platinum",
+    "raw_": "raw",
+}
+"""Table name prefixes mapped to the layer they imply when no source file exists."""
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -76,7 +87,7 @@ class GlobSqlFileDiscoverer:
 class RegexSqlParser:
     """Parses SQL files using regex to extract table dependencies."""
 
-    def parse(self, content: str, file_path: Path) -> list[ParsedStatement]:
+    def parse(self, content: SqlText, file_path: Path) -> list[ParsedStatement]:
         """Parse SQL content into structured statements.
 
         Args:
@@ -110,7 +121,7 @@ class RegexSqlParser:
 # ─── Atomic parsing functions ────────────────────────────────────────────────
 
 
-def strip_comments(sql: str) -> str:
+def strip_comments(sql: SqlText) -> SqlText:
     """Remove SQL comments from content.
 
     Handles both single-line (--) and multi-line (/* ... */) comments.
@@ -126,7 +137,7 @@ def strip_comments(sql: str) -> str:
     return sql
 
 
-def split_statements(sql: str) -> list[str]:
+def split_statements(sql: SqlText) -> list[str]:
     """Split SQL content into individual statements on semicolons.
 
     Args:
@@ -138,7 +149,7 @@ def split_statements(sql: str) -> list[str]:
     return [s.strip() for s in sql.split(";") if s.strip()]
 
 
-def classify_statement(stmt: str) -> str:
+def classify_statement(stmt: str) -> StatementType:
     """Classify a SQL statement by its leading keyword.
 
     Args:
@@ -147,7 +158,7 @@ def classify_statement(stmt: str) -> str:
     Returns:
         One of "create", "insert", "merge", "drop", "declare", "other".
     """
-    keyword_map = {
+    keyword_map: dict[str, StatementType] = {
         "CREATE": "create",
         "INSERT": "insert",
         "MERGE": "merge",
@@ -157,11 +168,11 @@ def classify_statement(stmt: str) -> str:
     words = stmt.split()
     if not words:
         return "other"
-    first = words[0].upper()
-    return keyword_map.get(first, "other")
+    matched = keyword_map.get(words[0].upper())
+    return matched if matched is not None else "other"
 
 
-def extract_target(stmt: str, statement_type: str) -> str | None:
+def extract_target(stmt: str, statement_type: StatementType) -> TableName | None:
     """Extract the target table from a DDL/DML statement.
 
     Args:
@@ -183,7 +194,7 @@ def extract_target(stmt: str, statement_type: str) -> str | None:
     return match.group(1) if match else None
 
 
-def extract_all_tables(stmt: str) -> list[str]:
+def extract_all_tables(stmt: str) -> list[TableName]:
     """Extract all fully qualified table references from a statement.
 
     Args:
@@ -195,7 +206,7 @@ def extract_all_tables(stmt: str) -> list[str]:
     return [m.group(1) for m in TABLE_RE.finditer(stmt)]
 
 
-def compute_sources(all_tables: list[str], target: str) -> list[str]:
+def compute_sources(all_tables: list[TableName], target: TableName) -> list[TableName]:
     """Compute source tables by removing the target from all references.
 
     Args:
@@ -205,8 +216,8 @@ def compute_sources(all_tables: list[str], target: str) -> list[str]:
     Returns:
         Deduplicated list of source table names.
     """
-    seen: set[str] = set()
-    sources: list[str] = []
+    seen: set[TableName] = set()
+    sources: list[TableName] = []
     for t in all_tables:
         if t != target and t not in seen:
             seen.add(t)
@@ -240,10 +251,10 @@ class DependencyGraphBuilder:
         Returns:
             Frozen graph with nodes and edges.
         """
-        nodes: dict[str, TableNode] = {}
+        nodes: dict[TableName, TableNode] = {}
         edges: list[DependencyEdge] = []
         target_files = _build_target_files(statements)
-        seen_edges: set[tuple[str, str, str]] = set()
+        seen_edges: set[tuple[TableName, TableName, WriteStatementType]] = set()
         for ps in statements:
             if ps.target_table is None:
                 continue
@@ -262,9 +273,9 @@ class DependencyGraphBuilder:
 
     def _ensure_node(
         self,
-        nodes: dict[str, TableNode],
-        full_name: str,
-        target_files: dict[str, Path],
+        nodes: dict[TableName, TableNode],
+        full_name: TableName,
+        target_files: dict[TableName, Path],
     ) -> None:
         """Add a TableNode to the dict if not already present.
 
@@ -293,7 +304,7 @@ class DependencyGraphBuilder:
 
 def _build_target_files(
     statements: list[ParsedStatement],
-) -> dict[str, Path]:
+) -> dict[TableName, Path]:
     """Map each table to the SQL file that defines it.
 
     CREATE statements take priority over INSERT/MERGE so that the
@@ -305,8 +316,8 @@ def _build_target_files(
     Returns:
         Mapping of fully qualified table name to source file path.
     """
-    target_files: dict[str, Path] = {}
-    create_seen: set[str] = set()
+    target_files: dict[TableName, Path] = {}
+    create_seen: set[TableName] = set()
     for ps in statements:
         if ps.target_table is None:
             continue
@@ -325,7 +336,7 @@ def infer_layer(
     short_name: str,
     source_file: Path | None,
     sql_root: Path | None,
-) -> str:
+) -> Layer:
     """Determine the medallion layer of a table.
 
     Priority: (1) directory path of creating SQL file, (2) table name prefix,
@@ -337,25 +348,25 @@ def infer_layer(
         sql_root: Root of the SQL tables directory tree.
 
     Returns:
-        Layer string: "raw", "bronze", "silver", "gold", or "platinum".
+        The inferred layer (one of the ``Layer`` literals).
     """
     if source_file is not None:
         rel = _relative_parts(source_file, sql_root)
         for layer_dir in LAYER_DIRS:
             if layer_dir in rel:
                 return layer_dir
-    for prefix in LAYER_PREFIXES:
+    for prefix, layer in LAYER_PREFIXES.items():
         if short_name.startswith(prefix):
-            return prefix.rstrip("_")
+            return layer
     return "raw"
 
 
 def infer_subgroup(
-    layer: str,
-    dataset: str,
+    layer: Layer,
+    dataset: Dataset,
     source_file: Path | None,
     sql_root: Path | None,
-) -> str:
+) -> Subgroup:
     """Determine the subgroup within a layer.
 
     Args:
@@ -378,13 +389,15 @@ def infer_subgroup(
         return "core"
 
     if layer == "gold":
-        for sub in ("pipeline_1", "pipeline_2", "pipeline_3", "ml_model"):
+        gold_subs: tuple[Subgroup, ...] = ("pipeline_1", "pipeline_2", "pipeline_3", "ml_model")
+        for sub in gold_subs:
             if sub in rel:
                 return sub
         return "other"
 
     if layer == "platinum":
-        for sub in ("pipeline_1", "pipeline_2", "pipeline_4"):
+        plat_subs: tuple[Subgroup, ...] = ("pipeline_1", "pipeline_2", "pipeline_4")
+        for sub in plat_subs:
             if sub in rel:
                 return sub
         return "shared"

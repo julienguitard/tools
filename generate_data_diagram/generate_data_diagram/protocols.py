@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from .data_types import DependencyGraph, ParsedStatement
+from .data_types import DependencyGraph, Markdown, ParsedStatement, SqlText
 
 
 class SqlFileDiscoverer(Protocol):
@@ -26,7 +26,7 @@ class SqlFileDiscoverer(Protocol):
 class SqlParser(Protocol):
     """Parses SQL content into structured statements."""
 
-    def parse(self, content: str, file_path: Path) -> list[ParsedStatement]:
+    def parse(self, content: SqlText, file_path: Path) -> list[ParsedStatement]:
         """Parse SQL content into a list of statements.
 
         Args:
@@ -57,7 +57,7 @@ class GraphBuilder(Protocol):
 class DiagramRenderer(Protocol):
     """Renders a dependency graph as a Mermaid diagram."""
 
-    def render(self, graph: DependencyGraph) -> str:
+    def render(self, graph: DependencyGraph) -> Markdown:
         """Produce a complete Markdown document with Mermaid diagram.
 
         Args:
