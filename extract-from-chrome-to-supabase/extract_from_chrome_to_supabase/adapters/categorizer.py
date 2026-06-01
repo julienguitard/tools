@@ -2,7 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Literal, get_args
+
 from ..domain import CATEGORIES, DEFAULT_CATEGORY, Category, Tab, parse_category
+
+Provider = Literal["openai", "anthropic"]
+"""The LLM backends the AI categorizer knows how to call."""
+
+PROVIDERS: tuple[Provider, ...] = get_args(Provider)
+
+
+def parse_provider(value: str) -> Provider | None:
+    """Narrow a string (e.g. the ``AI_PROVIDER`` env var) to a ``Provider``.
+
+    Args:
+        value: A candidate provider name.
+
+    Returns:
+        The matching ``Provider`` literal, or ``None`` if unrecognized.
+    """
+    for provider in PROVIDERS:
+        if value == provider:
+            return provider
+    return None
 
 
 class KeywordCategorizer:
@@ -47,8 +69,8 @@ class KeywordCategorizer:
 class AiCategorizer:
     """Calls an LLM to categorize when keywords fail. Supports OpenAI and Anthropic."""
 
-    def __init__(self, provider: str, api_key: str, model: str) -> None:
-        self._provider = provider  # "openai" or "anthropic"
+    def __init__(self, provider: Provider, api_key: str, model: str) -> None:
+        self._provider = provider
         self._api_key = api_key
         self._model = model
 

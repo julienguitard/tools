@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from .domain import Category, Link, Tab
+from .domain import Category, Link, StoredLink, Tab
 
 
 class TabSource(Protocol):
@@ -17,7 +17,7 @@ class TabSource(Protocol):
 class LinkRepository(Protocol):
     """Reads and writes categorized links."""
 
-    def fetch_existing(self) -> list[dict]: ...
+    def fetch_existing(self) -> list[StoredLink]: ...
     def save_links(self, links: list[Link]) -> None: ...
 
 
@@ -30,7 +30,7 @@ class CategorySuggester(Protocol):
 class UserPrompter(Protocol):
     """Interactive CLI prompts for the curation workflow."""
 
-    def show_existing(self, links: list[dict]) -> None: ...
+    def show_existing(self, links: list[StoredLink]) -> None: ...
     def present_tab(self, tab: Tab, index: int, total: int, already_saved: bool) -> None: ...
     def ask_include(self) -> bool: ...
     def ask_category(self, suggestion: Category) -> Category: ...

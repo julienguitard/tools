@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from ..domain import Link
+from ..domain import Link, StoredLink, Url
 
 
 class SupabaseLinkRepository:
@@ -20,7 +20,7 @@ class SupabaseLinkRepository:
 
     def __init__(
         self,
-        base_url: str,
+        base_url: Url,
         api_key: str,
         *,
         email: str = "",
@@ -71,7 +71,7 @@ class SupabaseLinkRepository:
 
     # -- reads / writes ------------------------------------------------------
 
-    def fetch_existing(self) -> list[dict]:
+    def fetch_existing(self) -> list[StoredLink]:
         import httpx
 
         resp = httpx.get(
@@ -97,7 +97,7 @@ class SupabaseLinkRepository:
 class MockLinkRepository:
     """Fake implementation for local testing."""
 
-    def fetch_existing(self) -> list[dict]:
+    def fetch_existing(self) -> list[StoredLink]:
         return [
             {"url": "https://example.com/already-saved", "category": "other"},
         ]

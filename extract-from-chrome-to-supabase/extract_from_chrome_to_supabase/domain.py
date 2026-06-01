@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, get_args
+from typing import Literal, TypedDict, get_args
 
 type Url = str
 
@@ -61,6 +61,18 @@ def parse_category(value: str) -> Category | None:
     return None
 
 
+class StoredLink(TypedDict):
+    """A link as persisted in / returned by the ``links`` table.
+
+    ``category`` is typed as ``str`` rather than ``Category`` because rows
+    read back from storage may carry labels that predate the current
+    taxonomy; writes always use a valid ``Category`` (see ``Link.to_dict``).
+    """
+
+    url: Url
+    category: str
+
+
 @dataclass(frozen=True)
 class Tab:
     """A single Chrome browser tab."""
@@ -76,5 +88,5 @@ class Link:
     url: Url
     category: Category
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> StoredLink:
         return {"url": self.url, "category": self.category}

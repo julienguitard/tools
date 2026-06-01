@@ -90,7 +90,7 @@ def make_curator(output_dir: Path, *, dry_run: bool = False) -> CurateTabsUseCas
         MockLinkRepository,
         SupabaseLinkRepository,
     )
-    from .adapters.categorizer import AiCategorizer, KeywordCategorizer
+    from .adapters.categorizer import AiCategorizer, KeywordCategorizer, parse_provider
 
     base_url = os.getenv("SUPABASE_URL", "")
     api_key = os.getenv("SUPABASE_API_KEY", "")
@@ -114,7 +114,7 @@ def make_curator(output_dir: Path, *, dry_run: bool = False) -> CurateTabsUseCas
 
     # Build categorizer: keyword heuristic → AI fallback
     keyword = KeywordCategorizer()
-    ai_provider = os.getenv("AI_PROVIDER", "").lower()
+    ai_provider = parse_provider(os.getenv("AI_PROVIDER", "").lower())
     ai_key = os.getenv("AI_API_KEY", "")
     ai_model = os.getenv("AI_MODEL", "")
 

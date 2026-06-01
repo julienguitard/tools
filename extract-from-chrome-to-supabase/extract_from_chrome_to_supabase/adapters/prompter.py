@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..domain import CATEGORIES, Category, Link, Tab, parse_category
+from ..domain import CATEGORIES, Category, Link, StoredLink, Tab, parse_category
 
 
 class CliPrompter:
     """Terminal-based user interaction."""
 
-    def show_existing(self, links: list[dict]) -> None:
+    def show_existing(self, links: list[StoredLink]) -> None:
         print(f"\n{len(links)} link(s) already in Supabase.\n")
 
     def present_tab(self, tab: Tab, index: int, total: int, already_saved: bool) -> None:
