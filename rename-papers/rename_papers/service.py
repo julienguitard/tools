@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .domain import Article, PaperFile, RenameAction
+from .domain import Article, Filename, PaperFile, RenameAction
 from .ports import FileSystem, PdfReader, SlugGenerator
 
 
@@ -34,7 +34,7 @@ class PaperRenamer:
     def plan(self, folder: Path) -> list[RenameAction]:
         """Produce an ordered rename plan. Reads PDFs + calls LLM, no renames."""
         paths = self._fs.list_pdfs(folder)
-        used: set[str] = set()
+        used: set[Filename] = set()
         actions: list[RenameAction] = []
 
         for path in paths:
@@ -64,7 +64,7 @@ class PaperRenamer:
         return actions
 
     @staticmethod
-    def _deduplicate(name: str, used: set[str]) -> str:
+    def _deduplicate(name: Filename, used: set[Filename]) -> Filename:
         if name not in used:
             return name
         counter = 2

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from .domain import DocumentText, Slug
+
 
 class FileSystem(Protocol):
     """Abstraction over the local filesystem."""
@@ -17,10 +19,10 @@ class FileSystem(Protocol):
 class PdfReader(Protocol):
     """Abstraction over PDF text extraction."""
 
-    def extract_text(self, path: Path) -> str: ...
+    def extract_text(self, path: Path) -> DocumentText: ...
 
 
 class SlugGenerator(Protocol):
     """Abstraction over the LLM-based slug generation."""
 
-    def generate(self, text: str) -> str: ...
+    def generate(self, text: DocumentText) -> Slug: ...

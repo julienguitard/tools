@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import os
-from ..domain import Article
+from ..domain import Article, DocumentText, Slug
 
 
 class OpenAiSlugGenerator:
@@ -29,7 +29,7 @@ class OpenAiSlugGenerator:
         self._client = OpenAI(api_key=os.getenv("AI_API_KEY"))
         self._model = model
 
-    def generate(self, text: str) -> str:
+    def generate(self, text: DocumentText) -> Slug:
         if not text.strip():
             return "unknown_content"
 

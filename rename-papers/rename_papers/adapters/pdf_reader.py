@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from ..domain import DocumentText
+
 
 class PyMuPdfReader:
     """PDF text extraction via PyMuPDF (fitz)."""
@@ -13,7 +15,7 @@ class PyMuPdfReader:
         self._max_pages = max_pages
         self._max_chars = max_chars
 
-    def extract_text(self, path: Path) -> str:
+    def extract_text(self, path: Path) -> DocumentText:
         import fitz  # lazy import keeps domain pure at module level
 
         try:

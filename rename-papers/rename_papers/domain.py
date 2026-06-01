@@ -5,40 +5,51 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+type PaperId = str
+"""A paper's numeric identifier, e.g. ``2510.12269v3`` or ``0310054``."""
+
+type Slug = str
+"""A snake_case topic slug, e.g. ``tensor_logic_for_ai``."""
+
+type Filename = str
+"""A bare file name (no directory), e.g. ``2510.12269v3_tensor_logic.pdf``."""
+
+type DocumentText = str
+"""Raw text extracted from a PDF, fed to the slug generator."""
 
 
 @dataclass(frozen=True)
 class IdPrefix:
     """The numeric identifier extracted from the original filename."""
-    value: str       # e.g. "2510.12269v3", "0310054"
-    separator: str   # "." for arXiv-style, "_" for bare numeric
+    value: PaperId   # e.g. "2510.12269v3", "0310054"
+    separator: Literal[".", "_"]   # "." for arXiv-style, "_" for bare numeric
 
-    _PATTERNS: tuple = (
+    _PATTERNS: tuple[re.Pattern[str], ...] = (
         re.compile(r"^(\d{4}\.\d{4,5}v\d+)"),   # arXiv + version
         re.compile(r"^(\d{4}\.\d{4,5})"),         # arXiv
         re.compile(r"^(\d+)"),                     # bare numeric
     )
 
     @staticmethod
-    def parse(filename: str) -> IdPrefix | None:
+    def parse(filename: Filename) -> IdPrefix | None:
         """Extract a numeric ID prefix from a PDF filename stem. Pure."""
         stem = Path(filename).stem
         for pat in IdPrefix._PATTERNS:
             m = pat.match(stem)
             if m:
-                val = m.group(1)
-                sep = "_"
-                return IdPrefix(value=val, separator=sep)
+                return IdPrefix(value=m.group(1), separator="_")
         return None
 
 
 @dataclass(frozen=True)
 class Article:
     """The semantic identity of a paper — what the LLM extracts."""
-    slug: str   # e.g. "tensor_logic_for_ai"
+    slug: Slug   # e.g. "tensor_logic_for_ai"
 
     @staticmethod
-    def sanitize_slug(raw: str) -> str:
+    def sanitize_slug(raw: str) -> Slug:
         """Normalise an LLM response into a clean snake_case slug. Pure."""
         slug = re.sub(r"[^a-zA-Z0-9_]", "_", raw)
         slug = re.sub(r"_+", "_", slug).strip("_").lower()
@@ -52,10 +63,10 @@ class PaperFile:
     id_prefix: IdPrefix
 
     @property
-    def original_name(self) -> str:
+    def original_name(self) -> Filename:
         return self.path.name
 
-    def target_name(self, article: Article) -> str:
+    def target_name(self, article: Article) -> Filename:
         """Build the new filename from prefix + slug. Pure."""
         p = self.id_prefix
         return f"{p.value}{p.separator}{article.slug}.pdf"
@@ -71,7 +82,7 @@ class PaperFile:
 class RenameAction:
     """Immutable description of what to do with one file."""
     source: Path
-    new_name: str
+    new_name: Filename
     skipped: bool = False
     reason: str = ""
 
