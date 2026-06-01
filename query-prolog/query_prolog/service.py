@@ -101,12 +101,13 @@ class QueryFactsUseCase:
 def make_query_repl(pl_path: Path) -> QueryFactsUseCase:
     """Wire concrete adapters into the service."""
     from .adapters import AiQueryTranslator, CliInterface, SwiPrologEngine
+    from .adapters.query_translator import parse_provider
 
     fact_file = FactFile.load(pl_path)
     engine = SwiPrologEngine()
 
     # Build translator if AI is configured
-    ai_provider = os.getenv("AI_PROVIDER", "").lower()
+    ai_provider = parse_provider(os.getenv("AI_PROVIDER", "").lower())
     ai_key = os.getenv("AI_API_KEY", "")
     ai_model = os.getenv("AI_MODEL", "")
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..domain import FactFile, QueryResult
+from ..domain import FactFile, PrologQuery, QueryResult
 
 
 class CliInterface:
@@ -20,7 +20,7 @@ class CliInterface:
             print()
             return None
 
-    def show_translation(self, prolog_query: str) -> None:
+    def show_translation(self, prolog_query: PrologQuery) -> None:
         """Display the translated Prolog query."""
         print(f"   -> {prolog_query}")
 

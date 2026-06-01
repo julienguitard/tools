@@ -2,18 +2,40 @@
 
 from __future__ import annotations
 
-from ..domain import FactFile
+from typing import Literal, get_args
+
+from ..domain import FactFile, NaturalQuery, PrologQuery
+
+Provider = Literal["openai", "anthropic"]
+"""The LLM backends the query translator knows how to call."""
+
+PROVIDERS: tuple[Provider, ...] = get_args(Provider)
+
+
+def parse_provider(value: str) -> Provider | None:
+    """Narrow a string (e.g. the ``AI_PROVIDER`` env var) to a ``Provider``.
+
+    Args:
+        value: A candidate provider name.
+
+    Returns:
+        The matching ``Provider`` literal, or ``None`` if unrecognized.
+    """
+    for provider in PROVIDERS:
+        if value == provider:
+            return provider
+    return None
 
 
 class AiQueryTranslator:
     """Translates natural language to Prolog using an LLM."""
 
-    def __init__(self, provider: str, api_key: str, model: str) -> None:
+    def __init__(self, provider: Provider, api_key: str, model: str) -> None:
         self._provider = provider
         self._api_key = api_key
         self._model = model
 
-    def translate(self, natural_query: str, fact_file: FactFile) -> str:
+    def translate(self, natural_query: NaturalQuery, fact_file: FactFile) -> PrologQuery:
         """Translate natural language to Prolog using the configured LLM."""
         prompt = (
             f"You are a Prolog expert. Given the following Prolog fact file, "

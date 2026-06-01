@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import subprocess
 
-from ..domain import FactFile, QueryResult
+from ..domain import Binding, FactFile, PrologQuery, QueryResult
 
 
 class SwiPrologEngine:
@@ -14,7 +14,7 @@ class SwiPrologEngine:
     def __init__(self, swipl_path: str = "swipl") -> None:
         self._swipl = swipl_path
 
-    def query(self, fact_file: FactFile, prolog_query: str) -> QueryResult:
+    def query(self, fact_file: FactFile, prolog_query: PrologQuery) -> QueryResult:
         """Execute a Prolog query via SWI-Prolog subprocess."""
         variables = self._extract_variables(prolog_query)
 
@@ -63,10 +63,10 @@ class SwiPrologEngine:
             return QueryResult(query=prolog_query, success=False)
 
         # Parse variable bindings
-        bindings = []
+        bindings: list[Binding] = []
         for line in stdout.splitlines():
             if "=" in line:
-                pairs = {}
+                pairs: Binding = {}
                 parts = re.findall(
                     r"([A-Z_]\w*)=([^A-Z\s]+|[^A-Z]*?)(?=\s*[A-Z_]\w*=|$)", line
                 )
@@ -82,7 +82,7 @@ class SwiPrologEngine:
         )
 
     @staticmethod
-    def _extract_variables(query: str) -> list[str]:
+    def _extract_variables(query: PrologQuery) -> list[str]:
         """Extract Prolog variables (uppercase identifiers) from a query."""
         matches = re.findall(r"\b([A-Z][A-Za-z0-9_]*)\b", query)
         seen: set[str] = set()

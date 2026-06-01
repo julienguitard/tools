@@ -6,14 +6,29 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+type PrologSource = str
+"""The raw text of a Prolog ``.pl`` fact file."""
+
+type PrologQuery = str
+"""A goal in Prolog syntax, e.g. ``parent(X, bob)``."""
+
+type NaturalQuery = str
+"""A question phrased in natural language, e.g. "Who is bob's parent?"."""
+
+type Predicate = str
+"""A predicate signature in ``name/arity`` form, e.g. ``parent/2``."""
+
+type Binding = dict[str, str]
+"""One solution's variable bindings, e.g. ``{"X": "bob"}`` (var name -> term)."""
+
 
 @dataclass(frozen=True)
 class FactFile:
     """A loaded Prolog fact file with extracted predicate signatures."""
 
     path: Path
-    content: str
-    predicates: list[str]  # e.g. ["parent/2", "male/1", "ancestor/2"]
+    content: PrologSource
+    predicates: list[Predicate]  # e.g. ["parent/2", "male/1", "ancestor/2"]
 
     @classmethod
     def load(cls, path: Path) -> FactFile:
@@ -23,7 +38,7 @@ class FactFile:
         return cls(path=path, content=content, predicates=predicates)
 
     @staticmethod
-    def _extract_predicates(content: str) -> list[str]:
+    def _extract_predicates(content: PrologSource) -> list[Predicate]:
         """Extract unique predicate signatures from a .pl file."""
         seen: dict[str, int] = {}
         for line in content.splitlines():
@@ -56,9 +71,9 @@ class FactFile:
 class QueryResult:
     """Result of executing a Prolog query."""
 
-    query: str
+    query: PrologQuery
     success: bool
-    bindings: list[dict[str, str]] = field(default_factory=list)
+    bindings: list[Binding] = field(default_factory=list)
     error: str = ""
 
     def display(self) -> str:
