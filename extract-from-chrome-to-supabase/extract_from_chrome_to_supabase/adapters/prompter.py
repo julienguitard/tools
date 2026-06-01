@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..domain import CATEGORIES, CATEGORIES_SET, Link, Tab
+from ..domain import CATEGORIES, Category, Link, Tab, parse_category
 
 
 class CliPrompter:
@@ -22,14 +22,16 @@ class CliPrompter:
     def ask_include(self) -> bool:
         return input("  Include? [y/N] ").strip().lower() == "y"
 
-    def ask_category(self, suggestion: str) -> str:
+    def ask_category(self, suggestion: Category) -> Category:
         print(f"  Suggested category: \033[1m{suggestion}\033[0m")
         print(f"  Options: {', '.join(CATEGORIES)}")
         override = input(f"  Category [{suggestion}]: ").strip().lower()
-        if override and override in CATEGORIES_SET:
-            return override
-        if override and override not in CATEGORIES_SET:
-            print(f"  Unknown '{override}', using '{suggestion}'")
+        if not override:
+            return suggestion
+        parsed = parse_category(override)
+        if parsed is not None:
+            return parsed
+        print(f"  Unknown '{override}', using '{suggestion}'")
         return suggestion
 
     def confirm_batch(self, links: list[Link]) -> bool:

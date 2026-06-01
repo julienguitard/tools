@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from ..domain import CATEGORIES, CATEGORIES_SET, Tab
+from ..domain import CATEGORIES, DEFAULT_CATEGORY, Category, Tab, parse_category
 
 
 class KeywordCategorizer:
     """Fast, offline keyword matching. Returns 'other' when unsure."""
 
-    _RULES: list[tuple[list[str], str]] = [
+    _RULES: list[tuple[list[str], Category]] = [
         (["llm", "gpt", "openai", "anthropic", "gemini", "llama", "mistral", "genai", "chatgpt", "copilot", "prompt engineer"], "generative_ai"),
         (["deep learning", "pytorch", "tensorflow", "neural net", "cnn", "rnn", "transformer architecture"], "deep_learning"),
         (["mlflow", "sklearn", "scikit", "xgboost", "reinforcement", "ml ", "machine learning", "feature store"], "machine_learning"),
@@ -36,12 +36,12 @@ class KeywordCategorizer:
         (["reference", "cheatsheet", "cheat sheet", "awesome-", "curated list"], "reference"),
     ]
 
-    def suggest(self, tab: Tab) -> str:
+    def suggest(self, tab: Tab) -> Category:
         text = (tab.title + " " + tab.url).lower()
         for keywords, category in self._RULES:
             if any(kw in text for kw in keywords):
                 return category
-        return "other"
+        return DEFAULT_CATEGORY
 
 
 class AiCategorizer:
@@ -52,7 +52,7 @@ class AiCategorizer:
         self._api_key = api_key
         self._model = model
 
-    def suggest(self, tab: Tab) -> str:
+    def suggest(self, tab: Tab) -> Category:
         categories_str = ", ".join(CATEGORIES)
         prompt = (
             f"Classify this web page into exactly one category.\n"
@@ -63,10 +63,10 @@ class AiCategorizer:
         )
         try:
             text = self._call_llm(prompt).strip().lower().replace(" ", "_")
-            return text if text in CATEGORIES_SET else "other"
+            return parse_category(text) or DEFAULT_CATEGORY
         except Exception as e:
             print(f"  AI categorization failed: {e}")
-            return "other"
+            return DEFAULT_CATEGORY
 
     def _call_llm(self, prompt: str) -> str:
         import httpx
@@ -118,9 +118,9 @@ class ChainedCategorizer:
         self._keyword = keyword
         self._ai = ai
 
-    def suggest(self, tab: Tab) -> str:
+    def suggest(self, tab: Tab) -> Category:
         result = self._keyword.suggest(tab)
-        if result != "other" or self._ai is None:
+        if result != DEFAULT_CATEGORY or self._ai is None:
             return result
         print("  Asking AI for category...")
         return self._ai.suggest(tab)
