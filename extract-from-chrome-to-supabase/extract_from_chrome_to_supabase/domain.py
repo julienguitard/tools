@@ -42,7 +42,7 @@ class Tab:
     """A single Chrome browser tab."""
 
     title: str
-    url: Url 
+    url: Url
 
 
 @dataclass(frozen=True)
